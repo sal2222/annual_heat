@@ -1,0 +1,150 @@
+---
+title: "annual_data"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+```
+
+This code imports and tidies data processed in the `heat_stress` project for datasets needed to recreate manuscript figures.
+
+
+```{r import}
+
+dmed_tidy <- 
+  read_rds("data/dmed_tidy.rds")
+
+```
+
+
+# Installation counts by type and total  
+
+```{r}
+dmed_tidy %>% 
+  dplyr::filter(!location %in% c("us", "overseas")) %>% 
+  group_by(location, type) %>% 
+  summarise(count = sum(count)) %>% 
+  pivot_wider(names_from = "type", values_from = "count") %>% 
+  mutate(total = `Ambulatory Data` + Hospitalizations + `Reportable Events`) %>% 
+  arrange(desc(total))
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r dmed_hsi}
+
+# this chunk leaves out joining "all_icd" used to calculate burden
+
+dmed_hsi <-
+  dmed_tidy %>% 
+    filter(location %in% c("benning", "bragg", "campbell", "jackson",
+                           "polk", "hood", "stewart", "leonardwood", 
+                           "riley", "irwin", "bliss"),
+           hsi == "all",
+           strata == "gender",
+           category == "Total") %>% 
+    dplyr::select(-category, -strata, -hsi) %>% 
+    dplyr::mutate(location = dplyr::recode(location, jackson = "fort_jackson"),
+           location = dplyr::recode(location, benning = "fort_benning_ga"),                 
+           location = dplyr::recode(location, bragg = "fort_bragg"),
+           location = dplyr::recode(location, campbell = "fort_campbell"),
+           location = dplyr::recode(location, polk = "fort_polk"),
+           location = dplyr::recode(location, hood = "fort_hood"),
+           location = dplyr::recode(location, stewart = "fort_stewart"),
+           location = dplyr::recode(location, leonardwood = "fort_leonard_wood"),
+           location = dplyr::recode(location, riley = "fort_riley"),
+           location = dplyr::recode(location, irwin = "ntc_and_fort_irwin"),
+           location = dplyr::recode(location, bliss = "fort_bliss"),
+           location = as.character(location)) 
+
+#%>% 
+#  left_join(all_icd, by = c("type", "year", "location")) %>% 
+#  mutate(burden = count/count_overall,
+#         burden_rate = rate/rate_overall,
+#         bct = case_when(location %in% c("fort_benning_ga", "fort_jackson", "fort_leonard_wood") ~ 1,
+#                         !location %in% c("fort_benning_ga", "fort_jackson", "fort_leonard_wood") ~ 0)) 
+
+```
+
+
+```{r index_long}
+
+index_long <- 
+  annual_tables_list %>% 
+    filter(installation %in% c("fort_benning_ga", "fort_bragg", "fort_campbell", "fort_jackson",
+                               "fort_polk", "fort_hood", "fort_stewart", "fort_leonard_wood", "fort_riley",
+                               "ntc_and_fort_irwin", "fort_bliss")) %>% 
+    unnest(data) %>% 
+    pivot_longer(., cols = `1990`:`2019`, names_to = "year", values_to = "value") %>% 
+    mutate(year = as.integer(year)) 
+
+ write_rds(index_long, file = "data/index_long.rds")
+
+```
+
+
+
+```{r joined_hsi}
+
+# Join to indices of heat; center and scale heat index value (pooled, for each index/type - pooled over all included locations and years)  
+  
+joined_hsi <-
+  index_long %>% 
+    left_join(dmed_hsi, by = c("installation" = "location", "year" = "year")) %>% 
+      drop_na(count) %>% 
+  ungroup() %>% 
+  dplyr::group_by(index, type) %>% 
+      mutate(value_scaled = scale(value, center = TRUE, scale = TRUE)) %>% 
+  ungroup() %>% 
+  na.omit()
+
+joined_hsi
+
+ write_rds(joined_hsi, file = "data/joined_hsi.rds")
+```
+Next: `joined_data` to `annual_summary.Rmd`
+Modified code below:
+
+
+Annual models from DMED data.
+
+```{r hsi_data, message = FALSE}
+
+# note: does not include canopy data
+
+hsi_data <-
+  joined_hsi %>% 
+    filter(!installation %in% "ntc_and_fort_irwin",
+           !(type %in% "Hospitalizations" & year %in% 1990),
+           !(type %in% "Ambulatory Data" & year %in% 1997)) %>% 
+    mutate(installation = factor(installation, ordered = FALSE),
+         index = factor(index, ordered = FALSE),
+         type = factor(type, ordered = FALSE),
+         installation = relevel(installation, ref = "fort_bliss"))
+
+ write_rds(hsi_data, file = "data/hsi_data.rds")
+
+levels(hsi_data$installation)
+
+summary(hsi_data)
+
+
+

@@ -1,0 +1,280 @@
+---
+title: "annual_indices"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(dygraphs)
+library(xts)
+library(timetk)
+library(zoo)
+library(forecast)
+library(fable)
+library(sweep)
+library(viridis)
+library(lubridate)
+library(scales)
+library(kableExtra)
+library(formattable)
+```
+
+
+## Introduction
+
+There are numerous approaches to obtaining annual indices of temperature and heat. We examine multiple absolute and relative methods including mean values, mean anomalies, counts of days and hours above threshold values, counts above percentiles, and counts above standard deviations. 
+
+The relative measures are averaged both over the entire year and over a common "heat season" from 01 May - 30 September. 
+
+Regardless of the method, these annual indices represent a 8,760*x* simplification where hourly measures are available. However, these indices may be useful to examine long-term trends and are necessary when health outcome data are aggregated annually.
+
+On this page, we compile annual index tables for temperature/heat exposures (Absolute and Relative).
+
+## Summary of indices
+
+*Assessed over full-year and "heat season"(May-Sept)*  
+
+### "Absolute" indices  
+
+**Annual mean**: temperature, heat index, WBGT  
+**Annual mean of max daily**: temperature, heat index, WBGT 
+**Annual heat risk  hours**
+  - Temperature above 90 / 100
+  - Heat index above 90 / 105 °F
+  - WBGT above  85 / 90 °F
+
+
+### "Relative" indices    
+
+
+**Annual mean daily anomaly** : temperature, heat index, WBGT  
+
+**Days mean temperature index above daily climate normal percentile** (averaged over all hours of day)  
+  - temperature, heat index, WBGT above 85th / 90th / 95th percentiles  
+  
+**Days mean temperature index above Standard Deviation(s) of mean daily temperature climate normal**  
+  - temperature, heat index, WBGT above 1 or 2 standard deviations of daily normal  
+
+
+
+## Import NLDAS data / indices
+
+```{r}
+
+nldas_hourly_index_rod <-
+  read_rds("../daily_heat/data/nldas_hourly_index_rod.rds")
+
+```
+
+
+```{r}
+
+mean_daily <-
+  read_rds("data/mean_daily.rds")
+
+max_daily <-
+  read_rds("data/max_daily.rds")
+
+mean_annual <-
+  read_rds("data/mean_annual.rds")
+
+max_annual <-
+  read_rds("data/max_annual.rds")
+
+mean_annual_may_sep <-
+  read_rds("data/mean_annual_may_sep.rds")
+
+max_annual_may_sep <-
+  read_rds("data/max_annual_may_sep.rds")
+
+annual_hours_threshold <-
+  read_rds("data/annual_hours_threshold.rds")
+
+annual_hours_threshold_may_sep <-
+  read_rds("data/annual_hours_threshold_may_sep.rds")
+
+climatology_daily <-
+  read_rds("data/climatology_daily.rds")
+
+anomaly_daily <-
+  read_rds("data/anomaly_daily.rds")
+
+anomaly <-
+  read_rds("data/anomaly.rds")
+```
+
+
+
+## Annual mean/max - daily
+
+```{r}
+
+mean_daily <-
+  nldas_hourly_index_rod %>% 
+  filter(lubridate::date(local_dttm) >= "1990-01-01" & lubridate::date(local_dttm) <= "2019-12-31") %>%
+  group_by(site_name, date = lubridate::date(local_dttm)) %>% 
+  summarise(mean_tmp = mean(tmp_f),
+            mean_hi = mean(hi_f),
+            mean_wbgt = mean(wbgt_f))
+
+write_rds(mean_daily, "data/mean_daily.rds")
+
+
+max_daily <-
+  nldas_hourly_index_rod %>% 
+  filter(lubridate::date(local_dttm) >= "1990-01-01" & lubridate::date(local_dttm) <= "2019-12-31") %>%
+  group_by(site_name, date = lubridate::date(local_dttm)) %>% 
+  summarise(max_tmp = max(tmp_f),
+            max_hi = max(hi_f),
+            max_wbgt = max(wbgt_f))
+
+write_rds(max_daily, "data/max_daily.rds")
+
+```
+
+
+
+## Annual mean/max indices
+
+```{r}
+
+
+mean_annual <-
+  mean_daily %>% 
+  group_by(site_name, year = lubridate::year(date)) %>% 
+  summarise(mean_tmp = mean(mean_tmp),
+            mean_hi = mean(mean_hi),
+            mean_wbgt = mean(mean_wbgt))
+
+write_rds(mean_annual, "data/mean_annual.rds")
+
+
+
+max_annual <-
+  max_daily %>% 
+  group_by(site_name, year = lubridate::year(date)) %>% 
+  summarise(max_tmp = mean(max_tmp),
+            max_hi = mean(max_hi),
+            max_wbgt = mean(max_wbgt))
+
+write_rds(max_annual, "data/max_annual.rds")
+
+
+
+mean_annual_may_sep <-
+  mean_daily %>%
+  filter(lubridate::month(date) %in% 05:09) %>% 
+  group_by(site_name, year = lubridate::year(date)) %>% 
+  summarise(mean_tmp_may_sep = mean(mean_tmp),
+            mean_hi_may_sep = mean(mean_hi),
+            mean_wbgt_may_sep = mean(mean_wbgt))
+
+write_rds(mean_annual_may_sep, "data/mean_annual_may_sep.rds")
+
+
+
+max_annual_may_sep <-
+  max_daily %>%
+  filter(lubridate::month(date) %in% 05:09) %>% 
+  group_by(site_name, year = lubridate::year(date)) %>% 
+  summarise(max_tmp_may_sep = mean(max_tmp),
+            max_hi_may_sep = mean(max_hi),
+            max_wbgt_may_sep = mean(max_wbgt))
+
+write_rds(max_annual_may_sep, "data/max_annual_may_sep.rds")
+```
+
+
+## Climatology (1990-2019)
+Mean temperature/index for each day of year by location
+
+```{r}
+
+climatology_daily <-
+  nldas_hourly_index_rod %>% 
+    filter(lubridate::date(local_dttm) >= "1990-01-01" & lubridate::date(local_dttm) <= "2019-12-31") %>%
+    group_by(site_name, month_day = paste(lubridate::month(local_dttm), lubridate::day(local_dttm), sep = "-")) %>% 
+    summarise(tmp_clim = mean(tmp_f),
+              hi_clim = mean(hi_f),
+              wbgt_clim = mean(wbgt_f)) %>%  
+  separate(month_day, c("month", "day"), remove = FALSE) %>%
+  mutate(month = as.integer(month), day = as.integer(day)) %>% 
+  arrange(site_name, month, day)
+  
+  
+ 
+write_rds(climatology_daily, "data/climatology_daily.rds")
+
+
+climatology_daily 
+```
+
+
+## Anomaly, daily
+```{r}
+
+# mean daily value - mean climatology value for same calender day
+
+anomaly_daily <-
+  mean_daily %>%
+    mutate(month_day = paste(lubridate::month(date), lubridate::day(date), sep = "-")) %>% 
+    left_join(climatology_daily, by = c("site_name", "month_day")) %>% 
+    mutate(tmp_anomaly = mean_tmp - tmp_clim, 
+            hi_anomaly = mean_hi - hi_clim,
+            wbgt_anomaly = mean_wbgt - wbgt_clim)
+
+write_rds(anomaly_daily, "data/anomaly_daily.rds")
+
+
+# Annual mean of daily anomalies
+
+anomaly <-
+  anomaly_daily %>% 
+  group_by(site_name, year = lubridate::year(date)) %>% 
+    summarise(tmp_anomaly = mean(tmp_anomaly),
+              hi_anomaly = mean(hi_anomaly),
+              wbgt_anomaly = mean(wbgt_anomaly))
+
+write_rds(anomaly, "data/anomaly.rds")
+
+```
+
+
+## Hourly counts above thresholds (absolute)
+```{r}
+
+annual_hours_threshold <-
+  nldas_hourly_index_rod %>%
+    filter(lubridate::date(local_dttm) >= "1990-01-01" & lubridate::date(local_dttm) <= "2019-12-31") %>% 
+    group_by(site_name, year = lubridate::year(local_dttm)) %>% 
+    summarise(hours_tmp_gt90 = sum(hi_f > 90),
+              hours_tmp_gt100 = sum(hi_f > 100),
+              hours_hi_gt90 = sum(hi_f > 90),
+              hours_hi_gt105 = sum(hi_f > 105),
+              hours_wbgt_gt85 = sum(wbgt_f > 85),
+              hours_wbgt_gt90 = sum(wbgt_f > 90))
+
+write_rds(annual_hours_threshold, "data/annual_hours_threshold.rds")
+
+
+annual_hours_threshold_may_sep <-
+  nldas_hourly_index_rod %>%
+    filter(lubridate::date(local_dttm) >= "1990-01-01" & lubridate::date(local_dttm) <= "2019-12-31",
+           lubridate::month(local_dttm) %in% 05:09) %>%
+    group_by(site_name, year = lubridate::year(local_dttm)) %>% 
+    summarise(hours_tmp_gt90_may_sep = sum(hi_f > 90),
+              hours_tmp_gt100_may_sep = sum(hi_f > 100),
+              hours_hi_gt90_may_sep = sum(hi_f > 90),
+              hours_hi_gt105_may_sep = sum(hi_f > 105),
+              hours_wbgt_gt85_may_sep = sum(wbgt_f > 85),
+              hours_wbgt_gt90_may_sep = sum(wbgt_f > 90))
+
+write_rds(annual_hours_threshold_may_sep, "data/annual_hours_threshold_may_sep.rds")
+  
+```
+
+
