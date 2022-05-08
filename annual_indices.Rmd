@@ -105,6 +105,9 @@ anomaly_daily <-
 
 anomaly <-
   read_rds("data/anomaly.rds")
+
+anomaly_may_sep <-
+  read_rds("data/anomaly_may_sep.rds")
 ```
 
 
@@ -121,7 +124,7 @@ mean_daily <-
             mean_hi = mean(hi_f),
             mean_wbgt = mean(wbgt_f))
 
-write_rds(mean_daily, "data/mean_daily.rds")
+# write_rds(mean_daily, "data/mean_daily.rds")
 
 
 max_daily <-
@@ -132,7 +135,7 @@ max_daily <-
             max_hi = max(hi_f),
             max_wbgt = max(wbgt_f))
 
-write_rds(max_daily, "data/max_daily.rds")
+# write_rds(max_daily, "data/max_daily.rds")
 
 ```
 
@@ -150,7 +153,7 @@ mean_annual <-
             mean_hi = mean(mean_hi),
             mean_wbgt = mean(mean_wbgt))
 
-write_rds(mean_annual, "data/mean_annual.rds")
+# write_rds(mean_annual, "data/mean_annual.rds")
 
 
 
@@ -161,7 +164,7 @@ max_annual <-
             max_hi = mean(max_hi),
             max_wbgt = mean(max_wbgt))
 
-write_rds(max_annual, "data/max_annual.rds")
+# write_rds(max_annual, "data/max_annual.rds")
 
 
 
@@ -173,7 +176,7 @@ mean_annual_may_sep <-
             mean_hi_may_sep = mean(mean_hi),
             mean_wbgt_may_sep = mean(mean_wbgt))
 
-write_rds(mean_annual_may_sep, "data/mean_annual_may_sep.rds")
+# write_rds(mean_annual_may_sep, "data/mean_annual_may_sep.rds")
 
 
 
@@ -185,7 +188,7 @@ max_annual_may_sep <-
             max_hi_may_sep = mean(max_hi),
             max_wbgt_may_sep = mean(max_wbgt))
 
-write_rds(max_annual_may_sep, "data/max_annual_may_sep.rds")
+# write_rds(max_annual_may_sep, "data/max_annual_may_sep.rds")
 ```
 
 
@@ -200,14 +203,17 @@ climatology_daily <-
     group_by(site_name, month_day = paste(lubridate::month(local_dttm), lubridate::day(local_dttm), sep = "-")) %>% 
     summarise(tmp_clim = mean(tmp_f),
               hi_clim = mean(hi_f),
-              wbgt_clim = mean(wbgt_f)) %>%  
+              wbgt_clim = mean(wbgt_f),
+              tmp_clim_sd = sd(tmp_f),
+              hi_clim_sd = sd(hi_f),
+              wbgt_clim_sd = sd(wbgt_f)) %>%  
   separate(month_day, c("month", "day"), remove = FALSE) %>%
   mutate(month = as.integer(month), day = as.integer(day)) %>% 
   arrange(site_name, month, day)
   
   
  
-write_rds(climatology_daily, "data/climatology_daily.rds")
+# write_rds(climatology_daily, "data/climatology_daily.rds")
 
 
 climatology_daily 
@@ -215,6 +221,11 @@ climatology_daily
 
 
 ## Anomaly, daily
+
+- mean of daily anomaly 
+- days mean greater than one standard deviation above normal for that day
+Full year and heat season
+
 ```{r}
 
 # mean daily value - mean climatology value for same calender day
@@ -227,7 +238,7 @@ anomaly_daily <-
             hi_anomaly = mean_hi - hi_clim,
             wbgt_anomaly = mean_wbgt - wbgt_clim)
 
-write_rds(anomaly_daily, "data/anomaly_daily.rds")
+# write_rds(anomaly_daily, "data/anomaly_daily.rds")
 
 
 # Annual mean of daily anomalies
@@ -237,9 +248,34 @@ anomaly <-
   group_by(site_name, year = lubridate::year(date)) %>% 
     summarise(tmp_anomaly = mean(tmp_anomaly),
               hi_anomaly = mean(hi_anomaly),
-              wbgt_anomaly = mean(wbgt_anomaly))
+              wbgt_anomaly = mean(wbgt_anomaly),
+              days_tmp_gt1sd = sum(mean_tmp > (tmp_clim + tmp_clim_sd)),
+              days_hi_gt1sd = sum(mean_hi > (hi_clim + hi_clim_sd)),
+              days_wbgt_gt1sd = sum(mean_wbgt > (wbgt_clim + wbgt_clim_sd)))
 
-write_rds(anomaly, "data/anomaly.rds")
+# write_rds(anomaly, "data/anomaly.rds")
+
+
+anomaly
+
+
+# Restrict to heat season
+
+anomaly_may_sep <-
+  anomaly_daily %>%
+  filter(lubridate::month(date) %in% 05:09) %>% 
+  group_by(site_name, year = lubridate::year(date)) %>% 
+    summarise(tmp_anomaly_may_sep = mean(tmp_anomaly),
+              hi_anomaly_may_sep = mean(hi_anomaly),
+              wbgt_anomaly_may_sep = mean(wbgt_anomaly),
+              days_tmp_gt1sd_may_sep = sum(mean_tmp > (tmp_clim + tmp_clim_sd)),
+              days_hi_gt1sd_may_sep = sum(mean_hi > (hi_clim + hi_clim_sd)),
+              days_wbgt_gt1sd_may_sep = sum(mean_wbgt > (wbgt_clim + wbgt_clim_sd)))
+
+# write_rds(anomaly_may_sep, "data/anomaly_may_sep.rds")
+
+anomaly_may_sep 
+
 
 ```
 
@@ -258,7 +294,7 @@ annual_hours_threshold <-
               hours_wbgt_gt85 = sum(wbgt_f > 85),
               hours_wbgt_gt90 = sum(wbgt_f > 90))
 
-write_rds(annual_hours_threshold, "data/annual_hours_threshold.rds")
+# write_rds(annual_hours_threshold, "data/annual_hours_threshold.rds")
 
 
 annual_hours_threshold_may_sep <-
@@ -273,8 +309,33 @@ annual_hours_threshold_may_sep <-
               hours_wbgt_gt85_may_sep = sum(wbgt_f > 85),
               hours_wbgt_gt90_may_sep = sum(wbgt_f > 90))
 
-write_rds(annual_hours_threshold_may_sep, "data/annual_hours_threshold_may_sep.rds")
+# write_rds(annual_hours_threshold_may_sep, "data/annual_hours_threshold_may_sep.rds")
   
 ```
+
+
+## Combine indices
+
+
+```{r}
+
+annual_indices <-
+  mean_annual %>% 
+    left_join(max_annual, by = c("site_name", "year")) %>%
+    left_join(mean_annual_may_sep, by = c("site_name", "year")) %>% 
+    left_join(max_annual_may_sep, by = c("site_name", "year")) %>%
+    left_join(annual_hours_threshold, by = c("site_name", "year")) %>% 
+    left_join(anomaly, by = c("site_name", "year")) %>%
+    left_join(anomaly_may_sep, by = c("site_name", "year"))
+
+# write_rds(annual_indices, "data/annual_indices.rds")
+
+annual_indices
+
+
+```
+
+
+
 
 
