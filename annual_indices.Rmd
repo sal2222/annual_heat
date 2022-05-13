@@ -68,6 +68,9 @@ On this page, we compile annual index tables for temperature/heat exposures (Abs
 nldas_hourly_index_rod <-
   read_rds("../daily_heat/data/nldas_hourly_index_rod.rds")
 
+annual_indices <-
+  read_rds("data/annual_indices.rds")
+
 ```
 
 
@@ -287,14 +290,14 @@ annual_hours_threshold <-
   nldas_hourly_index_rod %>%
     filter(lubridate::date(local_dttm) >= "1990-01-01" & lubridate::date(local_dttm) <= "2019-12-31") %>% 
     group_by(site_name, year = lubridate::year(local_dttm)) %>% 
-    summarise(hours_tmp_gt90 = sum(hi_f > 90),
-              hours_tmp_gt100 = sum(hi_f > 100),
+    summarise(hours_tmp_gt90 = sum(tmp_f > 90),
+              hours_tmp_gt100 = sum(tmp_f > 100),
               hours_hi_gt90 = sum(hi_f > 90),
               hours_hi_gt105 = sum(hi_f > 105),
               hours_wbgt_gt85 = sum(wbgt_f > 85),
               hours_wbgt_gt90 = sum(wbgt_f > 90))
 
-# write_rds(annual_hours_threshold, "data/annual_hours_threshold.rds")
+ #write_rds(annual_hours_threshold, "data/annual_hours_threshold.rds")
 
 
 annual_hours_threshold_may_sep <-
@@ -302,14 +305,14 @@ annual_hours_threshold_may_sep <-
     filter(lubridate::date(local_dttm) >= "1990-01-01" & lubridate::date(local_dttm) <= "2019-12-31",
            lubridate::month(local_dttm) %in% 05:09) %>%
     group_by(site_name, year = lubridate::year(local_dttm)) %>% 
-    summarise(hours_tmp_gt90_may_sep = sum(hi_f > 90),
-              hours_tmp_gt100_may_sep = sum(hi_f > 100),
+    summarise(hours_tmp_gt90_may_sep = sum(tmp_f > 90),
+              hours_tmp_gt100_may_sep = sum(tmp_f > 100),
               hours_hi_gt90_may_sep = sum(hi_f > 90),
               hours_hi_gt105_may_sep = sum(hi_f > 105),
               hours_wbgt_gt85_may_sep = sum(wbgt_f > 85),
               hours_wbgt_gt90_may_sep = sum(wbgt_f > 90))
 
-# write_rds(annual_hours_threshold_may_sep, "data/annual_hours_threshold_may_sep.rds")
+ #  write_rds(annual_hours_threshold_may_sep, "data/annual_hours_threshold_may_sep.rds")
   
 ```
 
@@ -332,7 +335,10 @@ annual_indices <-
 
 annual_indices
 
-
+# check
+annual_indices %>% 
+  dplyr::select(site_name, year, hours_tmp_gt90, hours_hi_gt90, hours_tmp_gt100) %>% 
+  arrange(desc(hours_tmp_gt100))
 ```
 
 

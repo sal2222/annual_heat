@@ -50,52 +50,20 @@ Annual models from DMED data and annual indices of heat and humidity from NLDAS-
 - load and prepare data
 - create outcome-specific datasets
 - negative binomial models (with and w/out year term), non-bootstrap
-- 2-year block bootstraps (select indices, 10k resamples, `basic` and `bca` CIs)
-- 2-year block bootstraps (all 90 indices, 2k resamples)
-- 3-year block bootstraps (select indices, 10k resamples)
-- standard bootstrap (select indices, 10k resamples)
+- 2-year block bootstraps (2k resamples, `basic` and `bca` CIs)
+- 3-year block bootstraps (2k resamples)
+- standard bootstrap (2k resamples)
+
+
+
 
 ## Load and prepare data
-```{r}
-
-```
-
-
 ```{r load_datasets, message = FALSE}
-
-joined_hsi <-
-  read_rds("data/joined_hsi.rds")
 
 hsi_data <-
   read_rds("data/hsi_data.rds")
 
-canopy_stats <-
-  read_rds("data/canopy_stats_na_reclassified.rds") %>% 
-  mutate(installation_lower = janitor::make_clean_names(installation))
-
-# Remove Fort Irwin/NTC due to low counts/rates and transient training
-# Remove initial year of health outcomes (1990 for Hospitilizations, 1997 for Ambulatory)
-
-hsi_data <-
-  joined_hsi %>% 
-    left_join(canopy_stats %>% 
-                dplyr::select(installation_lower, mean_canopy),
-              by = c("installation" = "installation_lower")) %>% 
-    filter(!installation %in% "ntc_and_fort_irwin",
-           !(type %in% "Hospitalizations" & year %in% 1990),
-           !(type %in% "Ambulatory Data" & year %in% 1997)) %>% 
-    mutate(installation = factor(installation, ordered = FALSE),
-         index = factor(index, ordered = FALSE),
-         type = factor(type, ordered = FALSE),
-         bct = factor(bct), 
-         installation = relevel(installation, ref = "fort_bliss"))
-
-levels(hsi_data$installation)
-
 summary(hsi_data)
-
-
-
 
 ```
 
@@ -104,75 +72,50 @@ summary(hsi_data)
 ```{r outcome_filtered}
 
 ambulatory_data <-
-  hsi_select %>%
+  hsi_data %>%
       filter(type %in% "Ambulatory Data") %>% 
-      dplyr::select(index, installation, year, count, value, population) %>% 
-      mutate(installation = as.character(installation))
+      dplyr::select(index, site_name, year, count, value, population) %>% 
+      mutate(site_name = as.character(site_name))
 
 
 hospitalization_data <-
-  hsi_select %>%
+  hsi_data %>%
       filter(type %in% "Hospitalizations") %>% 
-      dplyr::select(index, installation, year, count, value, population) %>% 
-      mutate(installation = as.character(installation))
+      dplyr::select(index, site_name, year, count, value, population) %>% 
+      mutate(site_name = as.character(site_name))
 
 
 rme_data <-
-  hsi_select %>%
-      filter(type %in% "Reportable Events") %>% 
-      dplyr::select(index, installation, year, count, value, population) %>% 
-      mutate(installation = as.character(installation))
-
-
-ambulatory_data_full <-
-  hsi_data %>%
-      filter(type %in% "Ambulatory Data") %>% 
-      dplyr::select(index, installation, year, count, value, population) %>% 
-      mutate(installation = as.character(installation))
-
-
-hospitalization_data_full <-
-  hsi_data %>%
-      filter(type %in% "Hospitalizations") %>% 
-      dplyr::select(index, installation, year, count, value, population) %>% 
-      mutate(installation = as.character(installation))
-
-
-rme_data_full <-
   hsi_data %>%
       filter(type %in% "Reportable Events") %>% 
-      dplyr::select(index, installation, year, count, value, population) %>% 
-      mutate(installation = as.character(installation))
-
+      dplyr::select(index, site_name, year, count, value, population) %>% 
+      mutate(site_name = as.character(site_name))
 
 
 ```
 
 
 
-Note: "days_tmp_gt95pct_may_sep", for each calendar day, compares mean daily temperature with 95th %-ile of 30-year (1990-2019) climatology for that day
-
-
-
-
-## Base models (with and without year)
+## Base models 
 
 ```{r}
 
 nb_fun = function(df) {
   df %>%
-    MASS::glm.nb(count ~ value + installation + offset(log(population)), data = .)
+    MASS::glm.nb(count ~ value + site_name + offset(log(population)), data = .)
 }
 
+
+# With year term
 nb_year_fun = function(df) {
   df %>%
-    MASS::glm.nb(count ~ value + installation + year + offset(log(population)), data = .)
+    MASS::glm.nb(count ~ value + site_name + year + offset(log(population)), data = .)
 }
 
 
 amb_nb <-
   ambulatory_data %>% 
-    nest(data = installation:population) %>% 
+    nest(data = site_name:population) %>% 
     mutate(nb_mod = map(data, nb_fun),
            nb_tidy =   map(nb_mod, ~ broom::tidy(., conf.int = TRUE)),
            nb_year_mod = map(data, nb_year_fun),
@@ -181,7 +124,7 @@ amb_nb <-
 
 hosp_nb <-
   hospitalization_data %>% 
-    nest(data = installation:population) %>% 
+    nest(data = site_name:population) %>% 
     mutate(nb_mod = map(data, nb_fun),
            nb_tidy =   map(nb_mod, ~ broom::tidy(., conf.int = TRUE)),
            nb_year_mod = map(data, nb_year_fun),
@@ -192,7 +135,7 @@ hosp_nb
 
 rme_nb <-
   rme_data %>% 
-    nest(data = installation:population) %>% 
+    nest(data = site_name:population) %>% 
     mutate(nb_mod = map(data, nb_fun),
            nb_tidy =   map(nb_mod, ~ broom::tidy(., conf.int = TRUE)),
            nb_year_mod = map(data, nb_year_fun),
@@ -209,7 +152,7 @@ rme_nb <-
 
 ## Bootstrap negative binomial models
 
-Issue: control for long-term time trends; including `year` as a dummy time variable pulls variane also associated with changes in temperature/heat.
+Issue: control for long-term time trends; including `year` as a dummy time variable pulls variance also associated with changes in temperature/heat.
 
 Approach: bootstrap model, selecting iterations of 2-3 year intervals to control for time trend.  
 Execute resampling of dataset and calculation of your statistics on these samples.
@@ -222,67 +165,35 @@ Execute resampling of dataset and calculation of your statistics on these sample
 
 
 amb_min_yr <- min(as.numeric(
-                hsi_select %>% 
+                 hsi_data %>% 
                   filter(type %in% "Ambulatory Data") %>% 
                   pull(year)))
 
 amb_max_yr <- max(as.numeric(
-                hsi_select %>% 
+                 hsi_data %>% 
                   filter(type %in% "Ambulatory Data") %>% 
                   pull(year)))
 
-
-# # Create randomized year dataframe (not currently used)
-# # Random years for two year block
-# amb_random_yrs_10k <- sample(amb_min_yr:(amb_max_yr - 1), size = 10000, replace = TRUE) 
-# 
-# # Dataframe of 10,000 random two year blocks
-# amb_two_yr_blocks <-
-#   amb_random_yrs_10k %>% 
-#     tibble::enframe(name = NULL) %>% 
-#     rename(first_yr = value) %>% 
-#     mutate(second_yr = first_yr + 1) 
-# 
-# amb_two_yr_blocks
-
-################################################################
-
 hosp_min_yr <- min(as.numeric(
-                hsi_select %>% 
+                 hsi_data %>% 
                   filter(type %in% "Hospitalizations") %>% 
                   pull(year)))
 
 hosp_max_yr <- max(as.numeric(
-                hsi_select %>% 
+                 hsi_data %>% 
                   filter(type %in% "Hospitalizations") %>% 
                   pull(year)))
 
 
-
-######################################################################
-
 rme_min_yr <- min(as.numeric(
-                hsi_select %>% 
+                 hsi_data %>% 
                   filter(type %in% "Reportable Events") %>% 
                   pull(year)))
 
 rme_max_yr <- max(as.numeric(
-                hsi_select %>% 
+                hsi_data %>% 
                   filter(type %in% "Reportable Events") %>% 
                   pull(year)))
-
-# # For two year block
-# 
-# rme_random_yrs_10k <- sample(rme_min_yr:(rme_max_yr - 1), size = 10000, replace = TRUE) 
-# 
-# # Dataframe of 10,000 random two year blocks
-# rme_two_yr_blocks <-
-#   rme_random_yrs_10k %>% 
-#     tibble::enframe(name = NULL) %>% 
-#     rename(first_yr = value) %>% 
-#     mutate(second_yr = first_yr + 1) 
-# 
-# rme_two_yr_blocks
 
 ```
 
@@ -301,12 +212,8 @@ amb_index_2yr_fun <- function(outcome_data, i) {
     random_years %>%
       map_dfr(~outcome_data %>% filter(year %in% .x))
   # run regression for given replicate, return estimated coefficients
-  coefficients(MASS::glm.nb(count ~ value + installation + offset(log(population)), data = block_obs))
+  coefficients(MASS::glm.nb(count ~ value + site_name + offset(log(population)), data = block_obs))
 }
-
-
-
-
 
 # citation("MASS")
 
@@ -314,12 +221,10 @@ ptm <- proc.time()
 
 amb_boot_2yr_block <-
   ambulatory_data %>% 
-    nest(amb_data = installation:population) %>% 
-  mutate(boot = map(amb_data, ~ boot(., amb_index_2yr_fun, 10000)),
-         tidy = map(boot, ~ broom::tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
-         
-         
-         #tidy_bca = map(boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "bca")))
+    nest(amb_data = site_name:population) %>% 
+  mutate(boot = map(amb_data, ~ boot(., amb_index_2yr_fun, 2000)),
+         tidy = map(boot, ~ broom::tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")),
+         tidy_bca = map(boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "bca")))
 
 proc.time() - ptm
 
@@ -343,7 +248,7 @@ hosp_index_2yr_fun <- function(outcome_data, i) {
     random_years %>%
       map_dfr(~outcome_data %>% filter(year %in% .x))
   # run regression for given replicate, return estimated coefficients
-  coefficients(MASS::glm.nb(count ~ value + installation + offset(log(population)), data = block_obs))
+  coefficients(MASS::glm.nb(count ~ value + site_name + offset(log(population)), data = block_obs))
 }
 
 
@@ -351,12 +256,9 @@ ptm <- proc.time()
 
 hosp_boot_2yr_block <-
   hospitalization_data %>% 
-    nest(hosp_data = installation:population) %>% 
-  mutate(boot = map(hosp_data, ~ boot(., hosp_index_2yr_fun, 10000)),
+    nest(hosp_data = site_name:population) %>% 
+  mutate(boot = map(hosp_data, ~ boot(., hosp_index_2yr_fun, 2000)),
          tidy = map(boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
-         
-         
-         #tidy_bca = map(boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "bca")))
 
 proc.time() - ptm
 
@@ -364,6 +266,13 @@ proc.time() - ptm
 write_rds(hosp_boot_2yr_block, path = "data/hosp_boot_2yr_block.rds")
 
 ```
+
+Error in `mutate()`:
+! Problem while computing `tidy_bca = map(boot, ~tidy(.,
+  conf.int = TRUE, conf.level = 0.95, conf.method = "bca"))`.
+Caused by error in `bca.ci()`:
+! estimated adjustment 'w' is infinite
+
 
 ```{r  rme_boot_2yr, eval = FALSE}
 
@@ -377,7 +286,7 @@ rme_index_2yr_fun <- function(outcome_data, i) {
      random_years %>%
       map_dfr(~outcome_data %>% filter(year %in% .x))
   # run regression for given replicate, return estimated coefficients
-  coefficients(MASS::glm.nb(count ~ value + installation + offset(log(population)), data = block_obs))
+  coefficients(MASS::glm.nb(count ~ value + site_name + offset(log(population)), data = block_obs))
 }
 
 
@@ -385,136 +294,21 @@ ptm <- proc.time()
 
 rme_boot_2yr_block <-
   rme_data %>% 
-    nest(re_data = installation:population) %>% 
-  mutate(boot = map(re_data, ~ boot(., rme_index_2yr_fun, 10000)),
-         tidy = map(boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
+    nest(re_data = site_name:population) %>% 
+  mutate(boot = map(re_data, ~ boot(., rme_index_2yr_fun, 2000)),
+         tidy = map(boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")),
+         tidy_bca = map(boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "bca")))
         
 proc.time() - ptm
 
 
 
-#rme_boot_2yr_block <-
-#  rme_boot_2yr_block %>% 
-#    mutate(tidy_bca = map(boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "bca")))
   
-#write_rds(rme_boot_2yr_block, path = "data/rme_boot_2yr_block.rds")
+write_rds(rme_boot_2yr_block, path = "data/rme_boot_2yr_block.rds")
+
 
 rme_boot_2yr_block %>% 
   pull(boot)
-
-```
-
-
-
-### All indices, 2-year block bootstrap
-
-```{r}
-
-ptm <- proc.time()
-
-amb_boot_2yr_block_all <-
-  ambulatory_data_full %>% 
-    nest(amb_data = installation:population) %>% 
-  mutate(boot = map(amb_data, ~ boot(., amb_index_2yr_fun, 2000)),
-         tidy = map(boot, ~ broom::tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
-
-proc.time() - ptm
-
-write_rds(amb_boot_2yr_block_all, path = "data/amb_boot_2yr_block_all.rds")
-
-
-
-ptm <- proc.time()
-
-hosp_boot_2yr_block_all <-
-  hospitalization_data_full %>% 
-    nest(hosp_data = installation:population) %>% 
-  mutate(boot = map(hosp_data, ~ boot(., hosp_index_2yr_fun, 2000)),
-         tidy = map(boot, ~ broom::tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
-
-proc.time() - ptm
-
-write_rds(hosp_boot_2yr_block_all, path = "data/hosp_boot_2yr_block_all.rds")
-
-
-ptm <- proc.time()
-
-rme_boot_2yr_block_all <-
-  rme_data_full %>% 
-    nest(rme_data = installation:population) %>% 
-  mutate(boot = map(rme_data, ~ boot(., amb_index_2yr_fun, 2000)),
-         tidy = map(boot, ~ broom::tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
-
-proc.time() - ptm
-
-# write_rds(rme_boot_2yr_block_all, path = "data/rme_boot_2yr_block_all.rds")
-
-
-```
-
-
-### Additional indices, 2-year block bootstrap
-
-Did not initially include `absolute` day/hour count indices restricted to MAY-SEP.
-Data preparation code is in `/heat_stress/addl_indices.Rmd`
-
-```{r}
-
-may_sep_day_hour_join <-
-  read_rds("data/may_sep_day_hour_join.rds") %>% 
-  filter(!index %in% c("days_hi_gt125_may_sep",
-                        "hours_hi_gt125_may_sep"))   # Too many zero values, models will not run with NAs for t2* 
-
-
-
-amb_boot_2yr_block_addl <-
-  may_sep_day_hour_join %>%
-    filter(type %in% "Ambulatory Data") %>% 
-    dplyr::select(index, installation, year, count, value, population) %>% 
-    nest(amb_data = installation:population) %>% 
-    mutate(boot = map(amb_data, ~ boot(., amb_index_2yr_fun, 2000)),
-           tidy = map(boot, ~ broom::tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
-
-write_rds(amb_boot_2yr_block_addl, path = "data/amb_boot_2yr_block_addl.rds")
-
-
-
-
-
-hosp_boot_2yr_block_addl <-
-   may_sep_day_hour_join %>%
-    filter(type %in% "Hospitalizations") %>% 
-    dplyr::select(index, installation, year, count, value, population) %>% 
-    nest(hosp_data = installation:population) %>% 
-  mutate(boot = map(hosp_data, ~ boot(., hosp_index_2yr_fun, 2000)),
-         tidy = map(boot, ~ broom::tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
-
-
-write_rds(hosp_boot_2yr_block_addl, path = "data/hosp_boot_2yr_block_addl.rds")
-
-
-
-rme_boot_2yr_block_addl <-
-  may_sep_day_hour_join %>%
-    filter(type %in% "Reportable Events") %>% 
-    dplyr::select(index, installation, year, count, value, population) %>% 
-    nest(rme_data = installation:population) %>% 
-  mutate(boot = map(rme_data, ~ boot(., amb_index_2yr_fun, 2000)),
-         tidy = map(boot, ~ broom::tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
-
-
-write_rds(rme_boot_2yr_block_addl, path = "data/rme_boot_2yr_block_addl.rds")
-
-
-# amb_boot_2yr_block_addl <-
-#   read_rds("data/amb_boot_2yr_block_addl.rds")
-# 
-# hosp_boot_2yr_block_addl <-
-#   read_rds("data/hosp_boot_2yr_block_addl.rds")
-# 
-# rme_boot_2yr_block_addl <-
-#   read_rds("data/rme_boot_2yr_block_addl.rds")
-
 
 ```
 
@@ -541,7 +335,7 @@ amb_index_3yr_fun <- function(outcome_data, i) {
       random_years %>%
         map_dfr(~outcome_data %>% filter(year %in% .x))
   # run regression for given replicate, return estimated coefficients
-  coefficients(MASS::glm.nb(count ~ value + installation + offset(log(population)), data = block_obs))
+  coefficients(MASS::glm.nb(count ~ value + site_name + offset(log(population)), data = block_obs))
 }
 
 
@@ -549,9 +343,10 @@ ptm <- proc.time()
 
 
 amb_boot_3yr_block <-
-  ambulatory_data %>% 
-    nest(amb_data = installation:population) %>% 
-    mutate(boot = map(amb_data, ~ boot(., amb_index_3yr_fun, 10000)),
+  ambulatory_data %>%
+    filter(index %in% c("mean_tmp", "mean_hi", "mean_wbgt")) %>% 
+    nest(amb_data = site_name:population) %>% 
+    mutate(boot = map(amb_data, ~ boot(., amb_index_3yr_fun, 2000)),
            tidy = map(boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
 
 proc.time() - ptm
@@ -573,16 +368,17 @@ hosp_index_3yr_fun <- function(outcome_data, i) {
         random_years %>%
           map_dfr(~outcome_data %>% filter(year %in% .x))
   # run regression for given replicate, return estimated coefficients
-  coefficients(MASS::glm.nb(count ~ value + installation + offset(log(population)), data = block_obs))
+  coefficients(MASS::glm.nb(count ~ value + site_name + offset(log(population)), data = block_obs))
 }
 
 
 ptm <- proc.time()
 
 hosp_boot_3yr_block <-
-  hospitalization_data %>% 
-    nest(hosp_data = installation:population) %>% 
-    mutate(boot = map(hosp_data, ~ boot(., hosp_index_3yr_fun, 10000)))
+  hospitalization_data %>%
+   filter(index %in% c("mean_tmp", "mean_hi", "mean_wbgt")) %>% 
+    nest(hosp_data = site_name:population) %>% 
+    mutate(boot = map(hosp_data, ~ boot(., hosp_index_3yr_fun, 2000)))
 
 proc.time() - ptm
 
@@ -609,7 +405,7 @@ rme_index_3yr_fun <- function(outcome_data, i) {
       random_years %>%
         map_dfr(~outcome_data %>% filter(year %in% .x))
   # run regression for given replicate, return estimated coefficients
-  coefficients(MASS::glm.nb(count ~ value + installation + offset(log(population)), data = block_obs))
+  coefficients(MASS::glm.nb(count ~ value + site_name + offset(log(population)), data = block_obs))
 }
 
 
@@ -617,8 +413,9 @@ ptm <- proc.time()
 
 rme_boot_3yr_block <-
   rme_data %>% 
-    nest(re_data = installation:population) %>% 
-    mutate(boot = map(re_data, ~ boot(., rme_index_3yr_fun, 10000)))
+   filter(index %in% c("mean_tmp", "mean_hi", "mean_wbgt")) %>% 
+    nest(re_data = site_name:population) %>% 
+    mutate(boot = map(re_data, ~ boot(., rme_index_3yr_fun, 2000)))
 
 rme_boot_3yr_block <-
   rme_boot_3yr_block %>% 
@@ -639,43 +436,39 @@ write_rds(rme_boot_3yr_block, path = "data/rme_boot_3yr_block.rds")
 
 std_boot <- function(D, d){
 	E = D[d,]
-	return(coefficients(MASS::glm.nb(count ~ value + installation + offset(log(population)), data = E)))
+	return(coefficients(MASS::glm.nb(count ~ value + site_name + offset(log(population)), data = E)))
 	
 }
 
 amb_boot_std <-
   ambulatory_data %>%
-    nest(amb_data = installation:population) %>% 
-    mutate(std_boot = map(amb_data, ~ boot(., std_boot, R = 10000)),          
+    nest(amb_data = site_name:population) %>%
+    filter(index %in% c("mean_tmp", "mean_hi", "mean_wbgt")) %>% 
+    mutate(std_boot = map(amb_data, ~ boot(., std_boot, R = 2000)),          
            tidy = map(std_boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
 
 
 hosp_boot_std <-
   hospitalization_data %>%
-    nest(hosp_data = installation:population) %>% 
-    mutate(hosp_boot = map(hosp_data, ~ boot(., std_boot, R = 10000)))
-
-hosp_boot_std <-
-  hosp_boot_std %>%            
-    mutate(tidy = map(hosp_boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
+  filter(index %in% c("mean_tmp", "mean_hi", "mean_wbgt")) %>% 
+    nest(hosp_data = site_name:population) %>% 
+        mutate(std_boot = map(hosp_data, ~ boot(., std_boot, R = 2000)),          
+               tidy = map(std_boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
 
 
 rme_boot_std <-
   rme_data %>%
-    nest(re_data = installation:population) %>% 
-    mutate(rme_boot = map(re_data, ~ boot(., std_boot, R = 10000)))
-
-rme_boot_std <-
-  rme_boot_std %>%            
-    mutate(tidy = map(rme_boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
+    nest(rme_data = site_name:population) %>%
+    filter(index %in% c("mean_tmp", "mean_hi", "mean_wbgt")) %>% 
+    mutate(std_boot = map(rme_data, ~ boot(., std_boot, R = 2000)),          
+           tidy = map(std_boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
 
 
-#write_rds(amb_boot_std, path = "data/amb_boot_std.rds")
-#write_rds(hosp_boot_std, path = "data/hosp_boot_std.rds")
-#write_rds(rme_boot_std, path = "data/rme_boot_std.rds")
+write_rds(amb_boot_std, path = "data/amb_boot_std.rds")
+write_rds(hosp_boot_std, path = "data/hosp_boot_std.rds")
+write_rds(rme_boot_std, path = "data/rme_boot_std.rds")
 
 ```
-
 
 
 
@@ -688,7 +481,7 @@ rme_boot_std <-
 
 
 
- rme_boot_2yr_block_all %>% 
+ rme_boot_2yr_block %>% 
     unnest(tidy) %>%
         filter(term %in% "value") %>%
     mutate(index = fct_reorder(index, exp(statistic))) %>% 
@@ -1484,337 +1277,6 @@ rme_nb %>%
 (r1 + r2 + r3) / (r4 + r5 + r6)
 
 ggsave("rme_sens.png", width = 10, height = 6)
-```
-
-
-
-
-
-
-### Hospitalization, all indices, 100 bootstrap
-
-```{r}
-ptm <- proc.time()
-
-hosp_boot_2yr_block_all <-
-  hospitalization_data_full %>% 
-    nest(hosp_data = installation:population) %>% 
-  mutate(boot = map(hosp_data, ~ boot(., hosp_index_2yr_fun, 100)),
-         tidy = map(boot, ~ broom::tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
-
-proc.time() - ptm
-
-#write_rds(hosp_boot_2yr_block_all, path = "data/hosp_boot_2yr_block_all.rds")
-
-
-
-hosp_boot_2yr_block_all %>% 
-  unnest(tidy) %>%
-      filter(term %in% "value") %>%
- ggplot() +
-      geom_point(aes(x = exp(statistic), y = index)) +
-      geom_point(aes(x = exp(statistic + bias), y = index), color = "red", shape = 4) +
-      geom_errorbarh(
-        aes(y = index,
-            xmin = exp(conf.low),
-            xmax = exp(conf.high))) +
-       geom_vline(aes(xintercept = 1), colour = "blue") +
-       theme_bw() +
-       theme(axis.text.y = element_text(size = rel(0.75))) +
-       ggtitle("Hospitalization Rate Ratio, Bootstrap, 2 year block, 100 iterations")
-
-
-hosp_boot_2yr_block_all %>% 
-  unnest(tidy) %>%
-      filter(term %in% "value") %>% 
-  dplyr::select(index, statistic, bias, conf.low, conf.high) %>% 
-  mutate(rr = exp(statistic),
-         rr_low = exp(conf.low),
-         rr_high = exp(conf.high),
-         rate_ratio = paste0(round(rr, 2), " (", round(rr_low, 2), ", ", round(rr_high, 2), ")")) %>% 
-  dplyr::select(index, rate_ratio) %>% 
-  as.data.frame() %>% print()
-```
-
-
-
-```{r}
-
-
-ptm <- proc.time()
-
-rme_boot_2yr_block_all <-
-  rme_data_full %>% 
-    nest(rme_data = installation:population) %>% 
-  mutate(boot = map(rme_data, ~ boot(., rme_index_2yr_fun, 100)),
-         tidy = map(boot, ~ broom::tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
-
-proc.time() - ptm
-
-#write_rds(rme_boot_2yr_block_all, path = "data/rme_boot_2yr_block_all.rds")
-
-
-rme_boot2_all_plot <-
-  rme_boot_2yr_block_all %>% 
-    unnest(tidy) %>%
-        filter(term %in% "value") %>%
-   ggplot() +
-        geom_point(aes(x = exp(statistic), y = index)) +
-        geom_point(aes(x = exp(statistic + bias), y = index), color = "red", shape = 4) +
-        geom_errorbarh(
-          aes(y = index,
-              xmin = exp(conf.low),
-              xmax = exp(conf.high))) +
-         geom_vline(aes(xintercept = 1), colour = "blue") +
-         theme_bw() +
-         theme(axis.text.y = element_text(size = rel(0.75))) +
-         ggtitle("Reportable Event Rate Ratio, Bootstrap, 2 year block, 100 iterations")
-
-# Limit x axis (RR) to 2.5
-  rme_boot_2yr_block_all %>% 
-    unnest(tidy) %>%
-        filter(term %in% "value") %>%
-    mutate(index = fct_reorder(index, exp(statistic))) %>% 
-   ggplot() +
-        geom_point(aes(x = exp(statistic), y = index)) +
-        geom_errorbarh(
-          aes(y = index,
-              xmin = exp(conf.low),
-              xmax = exp(conf.high))) +
-         geom_vline(aes(xintercept = 1), colour = "blue") +
-         coord_cartesian(xlim = c(0.75, 2.0)) +
-         theme_bw() +
-         theme(axis.text.y = element_text(size = rel(0.75)),
-               axis.title.y = element_blank()) +
-         ggtitle("Reportable Events") +
-         xlab("Rate Ratio")
-         
-
-
-#ggsave("rme_all.png", width = 8, height = 10.5)
-
-
-rme_boot_2yr_block_all %>% 
-  unnest(tidy) %>%
-      filter(term %in% "value") %>% 
-  dplyr::select(index, statistic, bias, conf.low, conf.high) %>% 
-  mutate(rr = exp(statistic),
-         rr_low = exp(conf.low),
-         rr_high = exp(conf.high),
-         rate_ratio = paste0(round(rr, 2), " (", round(rr_low, 2), ", ", round(rr_high, 2), ")")) %>% 
-  dplyr::select(index, rate_ratio) %>% 
-  as.data.frame() %>% print()
-```
-
-
-
-### Bootstrap 2 year block plots
-
-```{r}
-amb_boot_2yr_block %>% 
-  unnest(tidy) %>%
-      filter(term %in% "value") %>%
- ggplot() +
-      geom_point(aes(x = exp(statistic), y = index)) +
-      geom_point(aes(x = exp(statistic + bias), y = index), color = "red", shape = 4) +
-      geom_errorbarh(
-        aes(y = index,
-            xmin = exp(conf.low),
-            xmax = exp(conf.high))) +
-       geom_vline(aes(xintercept = 1), colour = "blue") +
-       theme_bw() +
-       theme(axis.text.y = element_text(size = rel(0.75))) +
-       ggtitle("Ambulatory Rate Ratio, Bootstrap, 2 year block, 10,000 iterations")
-
-
-hosp_boot_2yr_block %>% 
-  unnest(tidy) %>%
-      filter(term %in% "value") %>%
- ggplot() +
-      geom_point(aes(x = exp(statistic), y = index)) +
-      geom_point(aes(x = exp(statistic + bias), y = index), color = "red", shape = 4) +
-      geom_errorbarh(
-        aes(y = index,
-            xmin = exp(conf.low),
-            xmax = exp(conf.high))) +
-       geom_vline(aes(xintercept = 1), colour = "blue") +
-       theme_bw() +
-       theme(axis.text.y = element_text(size = rel(0.75))) +
-       ggtitle("Hospitalization Rate Ratio, Bootstrap, 2 year block, 10,000 iterations")
-
-rme_boot_2yr_block %>% 
-  unnest(tidy) %>%
-      filter(term %in% "value") %>%
- ggplot() +
-      geom_point(aes(x = exp(statistic), y = index)) +
-      geom_point(aes(x = exp(statistic + bias), y = index), color = "red", shape = 4) +
-      geom_errorbarh(
-        aes(y = index,
-            xmin = exp(conf.low),
-            xmax = exp(conf.high))) +
-       geom_vline(aes(xintercept = 1), colour = "blue") +
-       theme_bw() +
-       theme(axis.text.y = element_text(size = rel(0.75))) +
-       ggtitle("Reportable Event Rate Ratio, Bootstrap, 2 year block, 10,000 iterations")
-
-```
-
-
-
-
-
-
-
-## Bootstrap 3 year blocks
-
-
-```{r amb_boot_3yr, eval = FALSE}
-
-# 20 year timeframe (1998-2018: stitch 6 replicates of 3 year blocks
-
-amb_index_3yr_fun <- function(x, i) {
-  # Select random start year
-  random_year <- replicate(6, sample(amb_min_yr:(amb_max_yr - 2), size = 1, replace = TRUE))
-  # select the observations to subset. 
-  block_obs <- 
-    map_dfr(random_year, ~ x %>% 
-      filter(year %in% c(random_year, random_year + 1, random_year + 2) ))
-  # run regression for given replicate, return estimated coefficients
-  coefficients(MASS::glm.nb(count ~ value + installation + offset(log(population)), data = block_obs))
-}
-
-
-ptm <- proc.time()
-
-plan(multiprocess)
-
-amb_boot_3yr_block <-
-  ambulatory_data %>% 
-    nest(amb_data = installation:population) %>% 
-  mutate(boot = future_map(amb_data, ~ boot(., amb_index_3yr_fun, 10000)),
-         tidy = future_map(boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
-
-proc.time() - ptm
-
-write_rds(amb_boot_3yr_block, path = "data/amb_boot_3yr_block.rds")
-
-```
-
-
-
-```{r hosp_boot_3yr, eval = FALSE}
-
-hosp_index_3yr_fun <- function(x, i) {
-  # Select random start year
-  random_year <- replicate(9, sample(hosp_min_yr:(hosp_max_yr - 2), size = 1, replace = TRUE))
-  # select the observations to subset. 
-  block_obs <- 
-    map_dfr(random_year, ~ x %>% 
-      filter(year %in% c(random_year, random_year + 1, random_year + 2) ))
-  # run regression for given replicate, return estimated coefficients
-  coefficients(MASS::glm.nb(count ~ value + installation + offset(log(population)), data = block_obs))
-}
-
-
-ptm <- proc.time()
-
-hosp_boot_3yr_block <-
-  hospitalization_data %>% 
-    nest(hosp_data = installation:population) %>% 
-  mutate(boot = future_map(hosp_data, ~ boot(., hosp_index_3yr_fun, 10000)))
-
-proc.time() - ptm
-
-
-
-
-
-
-write_rds(hosp_boot_3yr_block, path = "data/hosp_boot_3yr_block.rds")
-
-hosp_boot_3yr_block <-
-  hosp_boot_3yr_block %>% 
-    mutate(tidy = map(boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")),
-           tidy_bca = map(boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "bca")))
-
-# BCa CI warnings (34):  In norm.inter(t, adj.alpha) : extreme order statistics used as endpoints
-
-```
-
-```{r  rme_boot_3yr, eval = FALSE}
-
-rme_index_3yr_fun <- function(x, i) {
-  # Select random start year
-  random_year <- replicate(7, sample(rme_min_yr:(rme_max_yr - 2), size = 1, replace = TRUE))
-  # select the observations to subset. 
-  block_obs <- 
-    map_dfr(random_year, ~ x %>% 
-      filter(year %in% c(random_year, random_year + 1, random_year + 2) ))
-  # run regression for given replicate, return estimated coefficients
-  coefficients(MASS::glm.nb(count ~ value + installation + offset(log(population)), data = block_obs))
-}
-
-
-ptm <- proc.time()
-
-rme_boot_3yr_block <-
-  rme_data %>% 
-    nest(re_data = installation:population) %>% 
-  mutate(boot = future_map(re_data, ~ boot(., rme_index_3yr_fun, 10000)))
-
-rme_boot_3yr_block <-
-  rme_boot_3yr_block %>% 
-    mutate(tidy = map(boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
-
-proc.time() - ptm
-
-write_rds(rme_boot_3yr_block, path = "data/rme_boot_3yr_block.rds")
-
-
-
-```
-
-
-## Bootstrap - original (draw single observations)
-
-```{r boot_single, eval = FALSE}
-
-std_boot <- function(D, d){
-	E = D[d,]
-	return(coefficients(MASS::glm.nb(count ~ value + installation + offset(log(population)), data = E)))
-	
-}
-
-amb_boot_std <-
-  ambulatory_data %>%
-    nest(amb_data = installation:population) %>% 
-    mutate(std_boot = map(amb_data, ~ boot(., std_boot, R = 10000)),          tidy = map(std_boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
-
-
-hosp_boot_std <-
-  hospitalization_data %>%
-    nest(hosp_data = installation:population) %>% 
-    mutate(hosp_boot = map(hosp_data, ~ boot(., std_boot, R = 10000)))
-
-hosp_boot_std <-
-  hosp_boot_std %>%            
-    mutate(tidy = map(hosp_boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
-
-
-rme_boot_std <-
-  rme_data %>%
-    nest(re_data = installation:population) %>% 
-    mutate(rme_boot = map(re_data, ~ boot(., std_boot, R = 10000)))
-
-rme_boot_std <-
-  rme_boot_std %>%            
-    mutate(tidy = map(rme_boot, ~ tidy(., conf.int = TRUE, conf.level = 0.95, conf.method = "basic")))
-
-
-#write_rds(amb_boot_std, path = "data/amb_boot_std.rds")
-#write_rds(hosp_boot_std, path = "data/hosp_boot_std.rds")
-#write_rds(rme_boot_std, path = "data/rme_boot_std.rds")
-
 ```
 
 

@@ -20,10 +20,16 @@ This code joins annual outcome data with annual index data
 dmed_tidy <- 
   read_rds("data/dmed_tidy.rds")
 
+dmed <- 
+  read_rds("data/dmed.rds")
+
 annual_indices <-
   read_rds("data/annual_indices.rds")
 
-
+########################
+# Output:
+hsi_data <-
+   read_rds("data/hsi_data.rds")
 
 ```
 

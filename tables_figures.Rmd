@@ -44,126 +44,65 @@ library(flextable)
 
 Annual models from DMED data.
 
+
+
+## Load  data
 ```{r load_datasets, message = FALSE}
 
-joined_hsi <-
-  read_rds("data/joined_hsi.rds")
-
-
-
-canopy_stats <-
-  read_rds("data/canopy_stats_na_reclassified.rds") %>% 
-  mutate(installation_lower = janitor::make_clean_names(installation))
-
-# Remove Fort Irwin/NTC due to low counts/rates and transient training
-# Remove initial year of health outcomes (1990 for Hospitilizations, 1997 for Ambulatory)
-
 hsi_data <-
-  joined_hsi %>% 
-    left_join(canopy_stats %>% 
-                dplyr::select(installation_lower, mean_canopy),
-              by = c("installation" = "installation_lower")) %>% 
-    filter(!installation %in% "ntc_and_fort_irwin",
-           !(type %in% "Hospitalizations" & year %in% 1990),
-           !(type %in% "Ambulatory Data" & year %in% 1997)) %>% 
-    mutate(installation = factor(installation, ordered = FALSE),
-         index = factor(index, ordered = FALSE),
-         type = factor(type, ordered = FALSE),
-         bct = factor(bct), 
-         installation = relevel(installation, ref = "fort_bliss"))
+  read_rds("data/hsi_data.rds")
 
-levels(hsi_data$installation)
-
-summary(hsi_data)
+```
 
 
-hsi_select <- hsi_data %>% 
-  filter(index %in% c("days_tmp_gt85pct_may_sep",              #relative, heat season
-                      "days_wbgt_gt85pct_may_sep",             #relative, heat season
-                      "days_heat_index_gt85pct_may_sep",       #relative, heat season
-                      "tmp_mean_may_sep",                      #absolute, heat season
-                      "heat_index_mean_may_sep",               #absolute, heat season
-                      "wbgt_f_mean_may_sep",                   #absolute, heat season
-                      "tmp_f_mean",                            #absolute, year-round
-                      "heat_index_mean",                       #absolute, year-round
-                      "wbgt_f_mean"))                          #absolute, year-round
+```{r}
+hsi_data %>% 
+  filter(index %in% c("hours_tmp_gt90", "hours_hi_gt90"))
 
 
-
-hsi_select %>% 
+#inspect
+hsi_data %>% 
   filter(type %in% "Hospitalizations", 
-         index %in% "days_tmp_gt85pct_may_sep") %>% 
-  group_by(installation) %>%
-  dplyr::select(installation:value) %>% 
-    pivot_wider(., names_from = year)
+         year %in% "2011",
+         site_name %in% "Fort Hood") %>% 
+  arrange(desc(value))
 
+```
+
+
+```{r load_datasets, message = FALSE}
 
 # Plots of heat indices over time
-hsi_select %>% 
-  filter(type %in% "Hospitalizations",
-          !index %in% c("days_tmp_gt85pct_may_sep", "days_heat_index_gt85pct_may_sep", "days_wbgt_gt85pct_may_sep")) %>%
-  ggplot(aes(x = year, y = value, color = installation)) +
+hsi_data %>% 
+  filter(type %in% "Hospitalizations") %>% 
+  ggplot(aes(x = year, y = value, color = site_name)) +
     geom_point() +
     geom_smooth(method = lm, se = FALSE, size = 0.5) +
   facet_wrap(~index, scale = "free") + 
   theme_bw()
 
-
-hsi_select %>% 
-  filter(type %in% "Hospitalizations",
-        index %in% c("days_tmp_gt85pct_may_sep", "days_heat_index_gt85pct_may_sep", "days_wbgt_gt85pct_may_sep")) %>%
-  ggplot(aes(x = year, y = value, color = installation)) +
-    geom_point() +
-    geom_smooth(method = lm, se = FALSE, size = 0.5) +
-  facet_wrap(~index, scale = "free") + 
-  theme_bw()
-
-  # all 9 together
-hsi_select %>% 
-  filter(type %in% "Hospitalizations") %>%
-  ggplot(aes(x = year, y = value, color = installation)) +
-    geom_point() +
-    geom_smooth(method = lm, se = FALSE, size = 0.5) +
-  facet_wrap(~index, scale = "free") + 
-  theme_bw()
-
-#ggsave("output/indices_by_installation.png")
-
-
+#ggsave("output/indices_by_site_name.png")
 
 
 # Boxplots
 
-
-hsi_select %>% 
-  filter(type %in% "Hospitalizations",
-         !index %in% c("days_tmp_gt85pct_may_sep", "days_heat_index_gt85pct_may_sep", "days_wbgt_gt85pct_may_sep")) %>%
+hsi_data %>% 
+  filter(type %in% "Hospitalizations") %>%
   group_by(year) %>% 
   summarise(mean_value = mean(value)) 
 
-hsi_select %>% 
-  filter(type %in% "Hospitalizations",
-         !index %in% c("days_tmp_gt85pct_may_sep", "days_heat_index_gt85pct_may_sep", "days_wbgt_gt85pct_may_sep")) %>%
-  group_by(installation, index) %>% 
+hsi_data %>% 
+  filter(type %in% "Hospitalizations") %>%
+  group_by(site_name, index) %>% 
   ggplot(aes(x = year, group = year, y = value)) +
     geom_boxplot() +
-    facet_grid(~index)
+    facet_wrap(~index)
     theme_bw()
-
-hsi_select %>% 
-  filter(type %in% "Hospitalizations",
-         index %in% c("days_tmp_gt85pct_may_sep", "days_heat_index_gt85pct_may_sep", "days_wbgt_gt85pct_may_sep")) %>%
-  group_by(installation, index) %>% 
-  ggplot(aes(x = year, group = year, y = value)) +
-    geom_boxplot() +
-    facet_grid(~index)
-    theme_bw()
-
 
 
 ```
 
-Note: "days_tmp_gt95pct_may_sep", for each calendar day, compares mean daily temperature with 95th %-ile of 30-year (1990-2019) climatology for that day
+
 
 ## Tables
 
@@ -171,10 +110,10 @@ Note: "days_tmp_gt95pct_may_sep", for each calendar day, compares mean daily tem
 
 # Table 1: HSI outcomes
 
-hsi_select %>% 
-  filter(index %in% "tmp_f_mean") %>% 
-  dplyr::select(installation, type, year, count, rate) %>% 
-  group_by(installation, type) %>%
+hsi_data %>% 
+  filter(index %in% "mean_tmp") %>% 
+  dplyr::select(site_name, type, year, count, rate) %>% 
+  group_by(site_name, type) %>%
   summarise(mean_count = mean(count),
             sd_count = sd(count),
             mean_rate = mean(rate),
@@ -182,65 +121,33 @@ hsi_select %>%
   pivot_wider(names_from = type, values_from = c(mean_count:sd_rate))
 
 
-
-hsi_select %>% 
-  filter(index %in% "tmp_f_mean") %>% 
-  dplyr::select(installation, type, year, count, rate) %>% 
-  group_by(installation, type) %>%
-  summarise(mean_count = mean(count),
-            sd_count = sd(count),
-            mean_rate = mean(rate),
-            sd_rate = sd(rate)) %>%
-  mutate(count = paste0(round(mean_count, 2)," ", "(", round(sd_count, 2), ")"),
-         rate = paste0(round(mean_rate, 2)," ", "(", round(sd_rate, 2), ")")) %>% 
-  dplyr::select(installation, type, count, rate) %>% 
-  pivot_wider(names_from = type, values_from = c(count, rate))
-
-# Burden Table
-
-hsi_select %>% 
-  filter(index %in% "tmp_f_mean") %>% 
-  dplyr::select(installation, type, year, burden) %>% 
-  group_by(installation, type) %>%
-  summarise(mean_burden = mean(burden) * 100,
-            sd_burden = sd(burden) * 100) %>% 
- mutate(burden = paste0(round(mean_burden, 2)," ", "(", round(sd_burden, 2), ")")) %>% 
-  dplyr::select(installation, type, burden) %>% 
-  pivot_wider(names_from = type, values_from = burden)
-
-
-
-
 # Table 2: Indices of Heat
 
-hsi_select %>% 
+hsi_data %>% 
   filter(type %in% "Hospitalizations") %>% 
-  dplyr::select(installation, index, year, value) %>% 
-  group_by(installation, index) %>%
+  dplyr::select(site_name, index, year, value) %>% 
+  group_by(site_name, index) %>%
   summarise(mean_value = mean(value),
             sd_value = sd(value)) %>%
   mutate(value = paste0(round(mean_value, 2)," ", "(", round(sd_value, 2), ")")) %>% 
-  dplyr::select(installation, index, value) %>% 
-  pivot_wider(names_from = index, values_from = value) %>% 
-  View()
+  dplyr::select(site_name, index, value) %>% 
+  pivot_wider(names_from = index, values_from = value) 
+
+
 
 ## Indices Correlation matrix
-hsi_select %>% 
-  filter(type %in% "Hospitalizations") %>% 
-  dplyr::select(installation, index, year, value) %>% 
-  group_by(installation, index) %>%
-  summarise(mean_value = mean(value)) %>% 
-  dplyr::select(installation, index, mean_value) %>% 
-  pivot_wider(names_from = index, values_from = mean_value) %>% 
-  ungroup() %>% 
-  mutate(installation = as.character(installation)) %>% .[2:10] %>% 
-  psych::pairs.panels()
-
-
+# hsi_data %>% 
+#   filter(type %in% "Hospitalizations") %>% 
+#   dplyr::select(site_name, index, year, value) %>% 
+#   group_by(site_name, index) %>%
+#   summarise(mean_value = mean(value)) %>% 
+#   dplyr::select(site_name, index, mean_value) %>% 
+#   pivot_wider(names_from = index, values_from = mean_value) %>% 
+#   ungroup() %>% 
+#   mutate(site_name = as.character(site_name)) %>% .[2:10] %>% 
+#   psych::pairs.panels()
 
 ```
-
-
 
 
 ## Temperature over time models
@@ -254,27 +161,11 @@ tmp_lm_function = function(df) {
 
 
 
-hsi_select %>% 
-  filter(type %in% "Hospitalizations") %>% 
-  nest(data = year:mean_canopy) %>% 
-  mutate(lm_tmp = map(data, tmp_lm_function),
-         tidy =   map(lm_tmp, broom::tidy),
-         glance = map(lm_tmp, broom::glance)) %>% 
-  unnest(tidy) %>% 
-  filter(term %in% "year") %>% 
-  arrange(p.value)
-
-
-
-
-
-
-
 # Slope estimate
 tmp_slopes <-
-  hsi_select %>% 
+  hsi_data %>% 
     filter(type %in% "Hospitalizations") %>% 
-    nest(data = year:mean_canopy) %>% 
+    nest(data = -c(site_name, index)) %>% 
     mutate(lm_tmp = map(data, tmp_lm_function),
            tidy =   map(lm_tmp, broom::tidy),
            glance = map(lm_tmp, broom::glance))
@@ -284,22 +175,20 @@ tmp_slopes <-
 # Temperature slope estimates (1991-2018)
 tmp_slopes %>% 
     unnest(tidy) %>%
-    dplyr::select(installation, index, term:p.value) %>% 
+    dplyr::select(site_name, index, term:p.value) %>% 
     filter(term %in% "year") 
 
 # Significant positive slopes
 tmp_slopes %>% 
     unnest(tidy) %>%
-    dplyr::select(installation, index, term:p.value) %>% 
+    dplyr::select(site_name, index, term:p.value) %>% 
     filter(term %in% "year",
            p.value < 0.05) %>% 
-    arrange(desc(estimate)) %>% View()
-
-
+    arrange(desc(estimate)) %>% as.data.frame()
 
 
 tmp_slopes %>% 
-    unnest(tidy) %>% 
+    unnest(tidy) %>%
     filter(term %in% "year") %>% 
     group_by(index) %>% 
     ggplot() +
@@ -308,9 +197,9 @@ tmp_slopes %>%
 
 
 # p-values    
-hsi_select %>% 
+hsi_data %>% 
   filter(type %in% "Hospitalizations") %>% 
-  nest(data = year:mean_canopy) %>% 
+  nest(data = -c(site_name, index)) %>%  
   mutate(lm_tmp = map(data, tmp_lm_function),
          tidy =   map(lm_tmp, broom::tidy),
          glance = map(lm_tmp, broom::glance)) %>% 
@@ -324,73 +213,18 @@ hsi_select %>%
 
 
 
-
-## Full list of indices
-tmp_slopes_full <-
-  hsi_data %>% 
-    filter(type %in% "Hospitalizations") %>% 
-    nest(data = year:mean_canopy) %>% 
-    mutate(lm_tmp = map(data, tmp_lm_function),
-           tidy =   map(lm_tmp, broom::tidy),
-           glance = map(lm_tmp, broom::glance))
-
-tmp_slopes_full %>% 
-    unnest(tidy) %>%
-    dplyr::select(installation, index, term:p.value) %>% 
-    filter(term %in% "year") %>% 
-    arrange(desc(estimate))
-
-# Significant positive slopes
-tmp_slopes_full %>% 
-    unnest(tidy) %>%
-    dplyr::select(installation, index, term:p.value) %>% 
-    filter(term %in% "year",
-           p.value < 0.05) %>% 
-    arrange(desc(estimate)) %>% View()  #View() to identify significant negative estimates
-
-
-tmp_slopes_full %>% 
-    unnest(tidy) %>% 
-    filter(term %in% "year") %>% 
-    group_by(index) %>% 
-    ggplot() +
-      geom_boxplot(aes(x = reorder(index, estimate), y = estimate)) +
-      coord_flip()
-
-
-# Additional indices
-
-
-tmp_slopes_addl <-
-  may_sep_day_hour_join %>%     # from "bootstrap2.Rmd"
-    filter(type %in% "Hospitalizations") %>%
-    dplyr::select(installation, index, everything()) %>% 
-    nest(data = year:value) %>% 
-    mutate(lm_tmp = map(data, tmp_lm_function),
-           tidy =   map(lm_tmp, broom::tidy),
-           glance = map(lm_tmp, broom::glance))
-  
-# Significant positive slopes
-tmp_slopes_addl %>% 
-    unnest(tidy) %>%
-    dplyr::select(installation, index, term:p.value) %>% 
-    filter(term %in% "year",
-           p.value < 0.05) %>% 
-    arrange(desc(estimate)) 
-
-599/1040
   
 ```
 
-- Out of 90 index/location combinations, 43 had a positive (significant at alpha = 0.05) slope; none had a significant negative slope
+
 
 ## Plot HSI
 
 ```{r}
 plot_amb_hsi <-
-  hsi_select %>% 
+  hsi_data %>% 
     filter(type == "Ambulatory Data") %>% 
-   ggplot(aes(x = year, y = rate, color = installation)) +
+   ggplot(aes(x = year, y = rate, color = site_name)) +
       geom_point() +
       geom_line() +
       labs(
@@ -404,9 +238,9 @@ plot_amb_hsi <-
 
 
 plot_hosp_hsi <-
-  hsi_select %>% 
+  hsi_data %>% 
     filter(type == "Hospitalizations") %>% 
-   ggplot(aes(x = year, y = rate, color = installation)) +
+   ggplot(aes(x = year, y = rate, color = site_name)) +
       geom_point() +
       geom_line() +
       labs(
@@ -421,9 +255,9 @@ plot_hosp_hsi <-
 
 
 plot_rme_hsi <-
-  hsi_select %>% 
+  hsi_data %>% 
     filter(type == "Reportable Events") %>% 
-   ggplot(aes(x = year, y = rate, color = installation)) +
+   ggplot(aes(x = year, y = rate, color = site_name)) +
       geom_point() +
       geom_line() +
       labs(
@@ -443,8 +277,8 @@ gridExtra::grid.arrange(plot_amb_hsi, plot_hosp_hsi, plot_rme_hsi, nrow = 1)
 # Facet wrap
 
 # HSI
- hsi_select %>% 
-   ggplot(aes(x = year, y = rate, color = installation)) +
+ hsi_data %>% 
+   ggplot(aes(x = year, y = rate, color = site_name)) +
       geom_point() +
       geom_line() +
       labs(
@@ -458,8 +292,8 @@ gridExtra::grid.arrange(plot_amb_hsi, plot_hosp_hsi, plot_rme_hsi, nrow = 1)
       theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
 # All ICD
- hsi_select %>% 
-   ggplot(aes(x = year, y = rate_overall, color = installation)) +
+ hsi_data %>% 
+   ggplot(aes(x = year, y = rate_overall, color = site_name)) +
       geom_point() +
       geom_line() +
       labs(
@@ -474,7 +308,7 @@ gridExtra::grid.arrange(plot_amb_hsi, plot_hosp_hsi, plot_rme_hsi, nrow = 1)
 
 ```
 
-## By Installation Tables
+## By site_name Tables
 
 
 ```{r}
@@ -489,8 +323,8 @@ wider_fun = function(df) {
 
 # get group keys
 group_name <- hsi_data %>% 
-  group_keys(installation) %>% 
-  .$installation
+  group_keys(site_name) %>% 
+  .$site_name
 
 
 index_tables <-    
@@ -498,8 +332,8 @@ index_tables <-
     filter(type %in% "Hospitalizations",
            year >= 2008) %>%
     mutate(value = format(round(value, 2), nsmall = 2)) %>% 
-    dplyr::select(installation, index, year, value) %>%
-    group_split(installation, keep = FALSE) %>%
+    dplyr::select(site_name, index, year, value) %>%
+    group_split(site_name, keep = FALSE) %>%
     purrr::map(wider_fun) %>% 
     setNames(group_name)
 
@@ -525,7 +359,7 @@ index_tables[[1]] %>%
 # hsi_data %>% 
 #   filter(index %in% "tmp_f_sd",
 #          type %in% "Hospitalizations") %>% 
-#    ggplot(aes(x = year, y = value, color = installation)) +
+#    ggplot(aes(x = year, y = value, color = site_name)) +
 #       geom_point() +
 #       geom_line() +
 #       labs(
@@ -540,7 +374,7 @@ index_tables[[1]] %>%
 # hsi_data %>% 
 #   filter(index %in% "heat_index_sd",
 #          type %in% "Hospitalizations") %>% 
-#    ggplot(aes(x = year, y = value, color = installation)) +
+#    ggplot(aes(x = year, y = value, color = site_name)) +
 #       geom_point() +
 #       geom_line() +
 #       labs(
