@@ -56,9 +56,6 @@ hsi_data <-
 
 
 ```{r}
-hsi_data %>% 
-  filter(index %in% c("hours_tmp_gt90", "hours_hi_gt90"))
-
 
 #inspect
 hsi_data %>% 
@@ -67,10 +64,13 @@ hsi_data %>%
          site_name %in% "Fort Hood") %>% 
   arrange(desc(value))
 
+
+hsi_data %>% 
+  summary()
 ```
 
 
-```{r load_datasets, message = FALSE}
+```{r}
 
 # Plots of heat indices over time
 hsi_data %>% 
@@ -84,21 +84,51 @@ hsi_data %>%
 #ggsave("output/indices_by_site_name.png")
 
 
-# Boxplots
+# grayscale plot - no legend
 
+# Plots of heat indices over time
 hsi_data %>% 
-  filter(type %in% "Hospitalizations") %>%
-  group_by(year) %>% 
-  summarise(mean_value = mean(value)) 
-
-hsi_data %>% 
-  filter(type %in% "Hospitalizations") %>%
-  group_by(site_name, index) %>% 
-  ggplot(aes(x = year, group = year, y = value)) +
-    geom_boxplot() +
-    facet_wrap(~index)
-    theme_bw()
-
+  filter(type %in% "Hospitalizations") %>% 
+  mutate(index = dplyr::recode(index, mean_tmp = "Mean Tmp",
+                          mean_hi = "Mean HI",
+                          mean_wbgt = "Mean WBGT",
+                          max_tmp = "Max Tmp",
+                          max_hi = "Max HI",
+                          max_wbgt = "Max WBGT",
+                          mean_tmp_may_sep = "Mean Tmp HS",
+                          mean_hi_may_sep = "Mean HI HS",
+                          mean_wbgt_may_sep = "Mean WBGT HS",
+                          max_tmp_may_sep = "Max Tmp HS",
+                          max_hi_may_sep = "Max HI HS",
+                          max_wbgt_may_sep = "Max WBGT HS",
+                          hours_tmp_gt90 = "Hrs Tmp > 90",
+                          hours_tmp_gt100 = "Hrs Tmp > 100",
+                          hours_hi_gt90 = "Hrs HI > 90",
+                          hours_hi_gt105 = "Hrs HI > 105",
+                          hours_wbgt_gt85 = "Hrs WBGT > 85",
+                          hours_wbgt_gt90 = "Hrs WBGT > 90",
+                          tmp_anomaly = "Tmp Anomaly",
+                          hi_anomaly = "HI Anomaly",
+                          wbgt_anomaly = "WBGT Anomaly",
+                          days_tmp_gt1sd = "Days Tmp > 1 SD",
+                          days_hi_gt1sd = "Days HI > 1 SD",
+                          days_wbgt_gt1sd = " Days WBGT > 1 SD",
+                          tmp_anomaly_may_sep = "Tmp Anomaly HS",
+                          hi_anomaly_may_sep = "HI Anomaly HS",
+                          wbgt_anomaly_may_sep = "WBGT Anomaly HS",
+                          days_tmp_gt1sd_may_sep = "Days Tmp > 1 SD HS",
+                          days_hi_gt1sd_may_sep = "Days HI > 1 SD HS",
+                          days_wbgt_gt1sd_may_sep = "Days WBGT > 1 SD HS")) %>% 
+  ggplot(aes(x = year, y = value)) +
+    geom_point(size = 0.75) +
+    geom_smooth(aes(group = site_name), method = lm, se = FALSE, size = 0.25, color = "gray") +
+    geom_smooth(method = lm, se = FALSE, size = 0.5, color = "blue") +
+    facet_wrap(~index, scale = "free", ncol = 5) + 
+  theme_bw() +
+  theme(strip.text = element_text(
+    size = 8)) +
+  labs(x = "Year",
+       y = "Index value")
 
 ```
 
@@ -134,18 +164,6 @@ hsi_data %>%
   pivot_wider(names_from = index, values_from = value) 
 
 
-
-## Indices Correlation matrix
-# hsi_data %>% 
-#   filter(type %in% "Hospitalizations") %>% 
-#   dplyr::select(site_name, index, year, value) %>% 
-#   group_by(site_name, index) %>%
-#   summarise(mean_value = mean(value)) %>% 
-#   dplyr::select(site_name, index, mean_value) %>% 
-#   pivot_wider(names_from = index, values_from = mean_value) %>% 
-#   ungroup() %>% 
-#   mutate(site_name = as.character(site_name)) %>% .[2:10] %>% 
-#   psych::pairs.panels()
 
 ```
 
@@ -211,9 +229,6 @@ hsi_data %>%
     geom_hline(yintercept = 0.05, color = "blue") +
     coord_flip() 
 
-
-
-  
 ```
 
 
@@ -291,20 +306,7 @@ gridExtra::grid.arrange(plot_amb_hsi, plot_hosp_hsi, plot_rme_hsi, nrow = 1)
       theme(strip.text = element_text(size = 6)) +
       theme(axis.text.x = element_text(angle = 90, hjust = 1))
 
-# All ICD
- hsi_data %>% 
-   ggplot(aes(x = year, y = rate_overall, color = site_name)) +
-      geom_point() +
-      geom_line() +
-      labs(
-        title = "All-ICD Code Rates",
-        x = "Year",
-        y = "All-ICD rate (per 1,000 persons per year)"
-      ) +
-      facet_grid(~type) +
-      theme_bw() +
-      theme(strip.text = element_text(size = 6)) +
-      theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
 
 ```
 
@@ -351,40 +353,4 @@ index_tables[[1]] %>%
 
 ```
 
-
-
-
-```{r}
-# Variability over time 
-# hsi_data %>% 
-#   filter(index %in% "tmp_f_sd",
-#          type %in% "Hospitalizations") %>% 
-#    ggplot(aes(x = year, y = value, color = site_name)) +
-#       geom_point() +
-#       geom_line() +
-#       labs(
-#         title = "Temperature SD",
-#         x = "Year",
-#         y = "SD, Temp (°F)"
-#       ) +
-#       facet_grid(~type) +
-#       theme_bw() +
-#       theme(axis.text.x = element_text(angle = 90, hjust = 1))
-#   
-# hsi_data %>% 
-#   filter(index %in% "heat_index_sd",
-#          type %in% "Hospitalizations") %>% 
-#    ggplot(aes(x = year, y = value, color = site_name)) +
-#       geom_point() +
-#       geom_line() +
-#       labs(
-#         title = "Temperature SD",
-#         x = "Year",
-#         y = "SD, Temp (°F)"
-#       ) +
-#       facet_grid(~type) +
-#       theme_bw() +
-#       theme(axis.text.x = element_text(angle = 90, hjust = 1))
-
-```
 

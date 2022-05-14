@@ -55,8 +55,6 @@ Annual models from DMED data and annual indices of heat and humidity from NLDAS-
 - standard bootstrap (2k resamples)
 
 
-
-
 ## Load and prepare data
 ```{r load_datasets, message = FALSE}
 
