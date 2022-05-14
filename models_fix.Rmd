@@ -28,28 +28,16 @@ library(reshape2)
 library(sjPlot)
 library(readxl)
 library(broom.mixed)
-library(bbmle)
-library(glmmTMB)
-library(performance)
 library(MASS)
 library(mgcv)
-library(grid)
-library(gridExtra)
-library(tableone)
-library(corrr)
-library(psych)
 library(zoo)
-library(patchwork) # install_github("thomasp85/patchwork")
-library(vcd)
-library(table1)
+
 
 ```
 
 Re-run models for 2 indices (temperature miscoded as HI)
 `hours_tmp_gt90`
 `hours_tmp_gt100`
-
-
 
 
 ## Load and prepare data
@@ -71,12 +59,10 @@ hsi_data2 <-
 ```
 
 
-
-
-
 Load first-run model objects;
  filter out 2 incorrect indices (heat index counts instead of temperature);
  row bind corrected models
+ 
 ```{r}
 
 amb_nb <-
@@ -112,7 +98,6 @@ amb_boot_2yr_block <-
 # write_rds(amb_boot_2yr_block, file = "data/amb_boot_2yr_block.rds")
 
 
-
 hosp_boot_2yr_block <-
   read_rds("data/hosp_boot_2yr_block.rds") %>% 
   filter(!index %in% c("hours_tmp_gt90", "hours_tmp_gt100")) %>% 
@@ -129,8 +114,6 @@ rme_boot_2yr_block <-
 # write_rds(rme_boot_2yr_block, file = "data/rme_boot_2yr_block.rds")
 
 ```
-
-
 
 
 Re-run models for 2 temperature - hour count indices
@@ -158,9 +141,7 @@ rme_data <-
       dplyr::select(index, site_name, year, count, value, population) %>% 
       mutate(site_name = as.character(site_name))
 
-
 ```
-
 
 
 ## Base models 
