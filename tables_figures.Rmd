@@ -40,6 +40,7 @@ library(psych)
 library(zoo)
 library(flextable)
 library(clipr)
+library(patchwork)
 
 ```
 
@@ -88,38 +89,59 @@ hsi_data %>%
 # grayscale plot - no legend
 
 # Plots of heat indices over time
-hsi_data %>% 
-  filter(type %in% "Hospitalizations") %>% 
-  mutate(index = dplyr::recode(index, mean_tmp = "Mean Tmp",
-                          mean_hi = "Mean HI",
-                          mean_wbgt = "Mean WBGT",
-                          max_tmp = "Max Tmp",
-                          max_hi = "Max HI",
-                          max_wbgt = "Max WBGT",
-                          mean_tmp_may_sep = "Mean Tmp HS",
-                          mean_hi_may_sep = "Mean HI HS",
-                          mean_wbgt_may_sep = "Mean WBGT HS",
-                          max_tmp_may_sep = "Max Tmp HS",
-                          max_hi_may_sep = "Max HI HS",
-                          max_wbgt_may_sep = "Max WBGT HS",
-                          hours_tmp_gt90 = "Hrs Tmp > 90",
-                          hours_tmp_gt100 = "Hrs Tmp > 100",
-                          hours_hi_gt90 = "Hrs HI > 90",
-                          hours_hi_gt105 = "Hrs HI > 105",
-                          hours_wbgt_gt85 = "Hrs WBGT > 85",
-                          hours_wbgt_gt90 = "Hrs WBGT > 90",
-                          tmp_anomaly = "Tmp Anomaly",
-                          hi_anomaly = "HI Anomaly",
-                          wbgt_anomaly = "WBGT Anomaly",
-                          days_tmp_gt1sd = "Days Tmp > 1 SD",
-                          days_hi_gt1sd = "Days HI > 1 SD",
-                          days_wbgt_gt1sd = " Days WBGT > 1 SD",
-                          tmp_anomaly_may_sep = "Tmp Anomaly HS",
-                          hi_anomaly_may_sep = "HI Anomaly HS",
-                          wbgt_anomaly_may_sep = "WBGT Anomaly HS",
-                          days_tmp_gt1sd_may_sep = "Days Tmp > 1 SD HS",
-                          days_hi_gt1sd_may_sep = "Days HI > 1 SD HS",
-                          days_wbgt_gt1sd_may_sep = "Days WBGT > 1 SD HS")) %>% 
+
+hsi_data_plot <-
+  hsi_data %>% 
+    filter(type %in% "Hospitalizations") %>% 
+    mutate(index = dplyr::recode(index, mean_tmp = "Mean Tmp",
+                            mean_hi = "Mean HI",
+                            mean_wbgt = "Mean WBGT",
+                            max_tmp = "Max Tmp",
+                            max_hi = "Max HI",
+                            max_wbgt = "Max WBGT",
+                            mean_tmp_may_sep = "Mean Tmp HS",
+                            mean_hi_may_sep = "Mean HI HS",
+                            mean_wbgt_may_sep = "Mean WBGT HS",
+                            max_tmp_may_sep = "Max Tmp HS",
+                            max_hi_may_sep = "Max HI HS",
+                            max_wbgt_may_sep = "Max WBGT HS",
+                            hours_tmp_gt90 = "Hrs Tmp > 90",
+                            hours_tmp_gt100 = "Hrs Tmp > 100",
+                            hours_hi_gt90 = "Hrs HI > 90",
+                            hours_hi_gt105 = "Hrs HI > 105",
+                            hours_wbgt_gt85 = "Hrs WBGT > 85",
+                            hours_wbgt_gt90 = "Hrs WBGT > 90",
+                            tmp_anomaly = "Tmp Anomaly",
+                            hi_anomaly = "HI Anomaly",
+                            wbgt_anomaly = "WBGT Anomaly",
+                            days_tmp_gt1sd = "Days Tmp > 1 SD",
+                            days_hi_gt1sd = "Days HI > 1 SD",
+                            days_wbgt_gt1sd = " Days WBGT > 1 SD",
+                            tmp_anomaly_may_sep = "Tmp Anomaly HS",
+                            hi_anomaly_may_sep = "HI Anomaly HS",
+                            wbgt_anomaly_may_sep = "WBGT Anomaly HS",
+                            days_tmp_gt1sd_may_sep = "Days Tmp > 1 SD HS",
+                            days_hi_gt1sd_may_sep = "Days HI > 1 SD HS",
+                            days_wbgt_gt1sd_may_sep = "Days WBGT > 1 SD HS"),
+         cat = case_when(str_detect(index, "Hrs")  ~ "Hours",
+                         str_detect(index, "Day")  ~ "Days",
+                         str_detect(index, "Anom")  ~ "Anomaly",
+                         str_detect(index, "Mean")  ~ "Mean",
+                         str_detect(index, "Max")  ~ "Maximum"),
+         season = case_when(str_detect(index, "HS")  ~ "Heat Season",
+                            TRUE ~ "Full Year"),
+         index_scale = case_when(str_detect(index, "Tmp")  ~ "Temperature",
+                                 str_detect(index, "HI")  ~ "Heat Index",
+                                 str_detect(index, "WBGT")  ~ "WBGT"))
+
+
+hsi_data_plot
+
+
+
+## All indices
+
+hsi_data_plot %>% 
   ggplot(aes(x = year, y = value)) +
     geom_point(size = 0.75) +
     geom_smooth(aes(group = site_name), method = lm, se = FALSE, size = 0.25, color = "gray") +
@@ -131,6 +153,146 @@ hsi_data %>%
   labs(x = "Year",
        y = "Index value")
 
+
+
+## Degree-based indices 
+  #  (Cannot use secondary scale for anomaly, deg F -> C)
+
+hsi_data_plot %>% 
+   filter(cat %in% c("Mean", "Maximum", "Anomaly")) %>%
+   mutate(cat = fct_relevel(cat, c("Mean", "Maximum", "Anomaly")),
+          index_scale = fct_relevel(index_scale, c("Temperature", "Heat Index", "WBGT"))) %>%  
+  ggplot(aes(x = year, y = value)) +
+    geom_point(size = 0.75) +
+    geom_smooth(aes(group = site_name), method = lm, se = FALSE, size = 0.25, color = "gray") +
+    geom_smooth(method = lm, se = FALSE, size = 0.5, color = "blue") +
+    #facet_grid(season + index_scale ~ cat, scales = "free") +
+    facet_grid(cat ~ season + index_scale, scales = "free") +
+  theme_bw(base_size = 10) +
+  theme(strip.text = element_text(
+    size = 8)) +
+  labs(x = "Year",
+       y = "Annual index (°F)") +
+  xlim(1990, 2020) + 
+  theme(axis.text.x = element_text(angle = 90)) +
+  scale_y_continuous("Annual index (°F)", sec.axis = sec_axis(trans = ~ (5/9) * (. - 32), name = "Annual index (°C)"))
+
+
+
+
+
+## Degree-based indices: Mean / Max
+
+
+mean_max_plot <-
+  hsi_data_plot %>% 
+     filter(cat %in% c("Mean", "Maximum")) %>%
+     mutate(cat = fct_relevel(cat, c("Mean", "Maximum")),
+            index_scale = fct_relevel(index_scale, c("Temperature", "Heat Index", "WBGT"))) %>%  
+    ggplot(aes(x = year, y = value)) +
+      geom_point(size = 0.75) +
+      geom_smooth(aes(group = site_name), method = lm, se = FALSE, size = 0.25, color = "gray") +
+      geom_smooth(method = lm, se = FALSE, size = 0.5, color = "blue") +
+      #facet_grid(season + index_scale ~ cat, scales = "free") +
+      facet_grid(cat ~ season + index_scale, scales = "free") +
+    theme_bw(base_size = 10) +
+    theme(strip.text = element_text(
+      size = 8)) +
+    labs(x = "Year",
+         y = "Annual index (°F)") +
+    xlim(1990, 2020) + 
+    theme(axis.text.x = element_text(angle = 90)) +
+    scale_y_continuous("Annual index (°F)", sec.axis = sec_axis(trans = ~ (5/9) * (. - 32), name = "Annual index (°C)"))
+
+#ggsave("output/mean_max_trend.tiff")
+
+## Degree-based indices: Anomaly
+
+anomaly_plot <-
+  hsi_data_plot %>% 
+     filter(cat %in% "Anomaly") %>%
+     mutate(index_scale = fct_relevel(index_scale, c("Temperature", "Heat Index", "WBGT"))) %>%  
+    ggplot(aes(x = year, y = value)) +
+      geom_point(size = 0.75) +
+      geom_smooth(aes(group = site_name), method = lm, se = FALSE, size = 0.25, color = "gray") +
+      geom_smooth(method = lm, se = FALSE, size = 0.5, color = "blue") +
+      #facet_grid(season + index_scale ~ cat, scales = "free") +
+      facet_grid(cat ~ season + index_scale, scales = "free") +
+    theme_bw(base_size = 10) +
+    theme(strip.text = element_text(
+      size = 8)) +
+    labs(x = "Year",
+         y = "Annual index (°F)") +
+    xlim(1990, 2020) + 
+    theme(axis.text.x = element_text(angle = 90)) +
+    scale_y_continuous("Mean anomaly (°F)", sec.axis = sec_axis(trans = ~ (5/9) * (.), name = "Mean anomaly (°C)"))
+
+#ggsave("output/anomaly_trend.tiff")
+
+
+mean_max_plot / anomaly_plot +
+  plot_annotation(tag_levels = "A")
+
+# ggsave("output/index_trends_patchwork.tiff")
+```
+
+
+### Smaller data points for print
+```{r}
+
+## Degree-based indices: Mean / Max
+
+
+mean_max_plot_s <-
+  hsi_data_plot %>% 
+     filter(cat %in% c("Mean", "Maximum")) %>%
+     mutate(cat = fct_relevel(cat, c("Mean", "Maximum")),
+            index_scale = fct_relevel(index_scale, c("Temperature", "Heat Index", "WBGT"))) %>%  
+    ggplot(aes(x = year, y = value)) +
+      geom_point(size = 0.2) +
+      geom_smooth(aes(group = site_name), method = lm, se = FALSE, size = 0.25, color = "gray", alpha = 0.5) +
+      geom_smooth(method = lm, se = FALSE, size = 0.5, color = "blue") +
+      #facet_grid(season + index_scale ~ cat, scales = "free") +
+      facet_grid(cat ~ season + index_scale, scales = "free") +
+    theme_bw(base_size = 10) +
+    theme(strip.text = element_text(
+      size = 8)) +
+    labs(x = "Year",
+         y = "Annual index (°F)") +
+    xlim(1990, 2020) + 
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
+    scale_y_continuous("Annual index (°F)", sec.axis = sec_axis(trans = ~ (5/9) * (. - 32), name = "Annual index (°C)"))
+
+
+
+## Degree-based indices: Anomaly
+
+anomaly_plot_s <-
+  hsi_data_plot %>% 
+     filter(cat %in% "Anomaly") %>%
+     mutate(index_scale = fct_relevel(index_scale, c("Temperature", "Heat Index", "WBGT"))) %>%  
+    ggplot(aes(x = year, y = value)) +
+      geom_point(size = 0.2) +
+      geom_smooth(aes(group = site_name), method = lm, se = FALSE, size = 0.25, color = "gray", alpha = 0.5) +
+      geom_smooth(method = lm, se = FALSE, size = 0.5, color = "blue") +
+      #facet_grid(season + index_scale ~ cat, scales = "free") +
+      facet_grid(cat ~ season + index_scale, scales = "free") +
+    theme_bw(base_size = 10) +
+    theme(strip.text = element_text(
+      size = 8)) +
+    labs(x = "Year",
+         y = "Annual index (°F)") +
+    xlim(1990, 2020) + 
+    theme(axis.text.x = element_text(angle = 90, ,  vjust = 0.5, hjust = 1)) +
+    scale_y_continuous("Mean anomaly (°F)", sec.axis = sec_axis(trans = ~ (5/9) * (.), name = "Mean anomaly (°C)"))
+
+
+
+
+mean_max_plot_s / anomaly_plot_s +
+  plot_annotation(tag_levels = "A")
+
+# ggsave("output/index_trends_patchwork_s.tiff")
 ```
 
 
