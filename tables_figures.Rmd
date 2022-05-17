@@ -39,6 +39,7 @@ library(corrr)
 library(psych)
 library(zoo)
 library(flextable)
+library(clipr)
 
 ```
 
@@ -153,15 +154,41 @@ hsi_data %>%
 
 # Table 2: Indices of Heat
 
-hsi_data %>% 
-  filter(type %in% "Hospitalizations") %>% 
-  dplyr::select(site_name, index, year, value) %>% 
-  group_by(site_name, index) %>%
-  summarise(mean_value = mean(value),
-            sd_value = sd(value)) %>%
-  mutate(value = paste0(round(mean_value, 2)," ", "(", round(sd_value, 2), ")")) %>% 
-  dplyr::select(site_name, index, value) %>% 
-  pivot_wider(names_from = index, values_from = value) 
+index_stats <-
+  hsi_data %>% 
+    filter(type %in% "Hospitalizations") %>% 
+    dplyr::select(site_name, index, year, value) %>% 
+    group_by(site_name, index) %>%
+    summarise(mean_value = mean(value),
+              sd_value = sd(value)) %>%
+    mutate(value = paste0(round(mean_value, 2)," ", "(", round(sd_value, 2), ")")) %>% 
+    dplyr::select(site_name, index, value) %>% 
+    pivot_wider(names_from = index, values_from = value) 
+
+
+index_stats
+
+# clipr::write_last_clip()
+
+
+## Indices Table in Celsius
+
+index_stats_c <-
+  hsi_data %>% 
+    filter(type %in% "Hospitalizations") %>% 
+    dplyr::select(site_name, index, year, value) %>% 
+    mutate(value_c = (5/9) * (value - 32)) %>% 
+    group_by(site_name, index) %>%
+    summarise(mean_value = mean(value_c),
+              sd_value = sd(value_c)) %>%
+    mutate(value = paste0(round(mean_value, 2)," ", "(", round(sd_value, 2), ")")) %>% 
+    dplyr::select(site_name, index, value) %>% 
+    pivot_wider(names_from = index, values_from = value) 
+
+
+index_stats_c
+
+# clipr::write_last_clip()
 
 
 
@@ -195,6 +222,27 @@ tmp_slopes %>%
     unnest(tidy) %>%
     dplyr::select(site_name, index, term:p.value) %>% 
     filter(term %in% "year") 
+
+
+# Mean annual indices
+
+
+# Temperature slope estimates (1991-2018)
+tmp_slopes %>% 
+    unnest(tidy) %>%
+    dplyr::select(site_name, index, term:p.value) %>% 
+    filter(term %in% "year", 
+           index %in% c("mean_tmp", "mean_hi","mean_wbgt", 
+                          "mean_tmp_may_sep", "mean_hi_may_sep", "mean_wbgt_may_sep")) %>% 
+  arrange(estimate) %>% as.data.frame()
+
+tmp_slopes %>% 
+    unnest(tidy) %>%
+    dplyr::select(site_name, index, term:p.value) %>% 
+    filter(term %in% "year", 
+           index %in% c("mean_tmp", "mean_hi","mean_wbgt", 
+                          "mean_tmp_may_sep", "mean_hi_may_sep", "mean_wbgt_may_sep")) %>% 
+  arrange(desc(p.value)) %>% View()
 
 # Significant positive slopes
 tmp_slopes %>% 
