@@ -35,7 +35,7 @@ This project / repository includes code used for re-analysis of work in https://
 
 5. `tables_figures`
 
-  - additional tables and figures
+    - additional tables and figures
 
 
 

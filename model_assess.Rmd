@@ -159,7 +159,7 @@ boot2_long <-
 ## IRR of two-year block bootstrap negative binomial models (Figure 2)
 Select indices, 10,000 bootstrap iterations
 
-RRs for active-duty HSI encounters at 10 CONUS U.S. Army installations per 1° increase in annual index of heat from 2-year block bootstrap negative binomial models with basic (empirical) confidence intervals based on 10,000 replicates, controlling for installation-level effects and long-term time trends. Temperature, HI, and WBGT categories reflect annual mean values in °F. Solid points reflect the mean of bootstrap estimates and non-filed points reflect the original sample (non-bootstrap) estimate. 
+RRs for active-duty HSI encounters at 10 CONUS U.S. Army installations per 1° increase in annual index of heat from 2-year block bootstrap negative binomial models with basic (empirical) confidence intervals based on 2,000 replicates, controlling for installation-level effects and long-term time trends. Temperature, HI, and WBGT categories reflect annual mean values in °F. Solid points reflect the mean of bootstrap estimates and non-filed points reflect the original sample (non-bootstrap) estimate. 
 
 ```{r}
 
