@@ -174,7 +174,7 @@ hsi_data_plot %>%
   labs(x = "Year",
        y = "Annual index (°F)") +
   xlim(1990, 2020) + 
-  theme(axis.text.x = element_text(angle = 90)) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
   scale_y_continuous("Annual index (°F)", sec.axis = sec_axis(trans = ~ (5/9) * (. - 32), name = "Annual index (°C)"))
 
 
@@ -201,7 +201,7 @@ mean_max_plot <-
     labs(x = "Year",
          y = "Annual index (°F)") +
     xlim(1990, 2020) + 
-    theme(axis.text.x = element_text(angle = 90)) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
     scale_y_continuous("Annual index (°F)", sec.axis = sec_axis(trans = ~ (5/9) * (. - 32), name = "Annual index (°C)"))
 
 #ggsave("output/mean_max_trend.tiff")
@@ -224,13 +224,54 @@ anomaly_plot <-
     labs(x = "Year",
          y = "Annual index (°F)") +
     xlim(1990, 2020) + 
-    theme(axis.text.x = element_text(angle = 90)) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) +
     scale_y_continuous("Mean anomaly (°F)", sec.axis = sec_axis(trans = ~ (5/9) * (.), name = "Mean anomaly (°C)"))
 
 #ggsave("output/anomaly_trend.tiff")
 
 
-mean_max_plot / anomaly_plot +
+
+## Hours 
+
+hours_plot <-
+  hsi_data_plot %>% 
+    filter(cat %in% "Hours") %>%
+    mutate(index = fct_relevel(index, "Hrs Tmp > 90", "Hrs Tmp > 100", "Hrs HI > 90", "Hrs HI > 105", "Hrs WBGT > 85", "Hrs WBGT > 90"),
+           index_scale = fct_relevel(index_scale, c("Temperature", "Heat Index", "WBGT"))) %>% 
+    ggplot(aes(x = year, y = value)) +
+      geom_point(size = 0.75) +
+      geom_smooth(aes(group = site_name), method = lm, se = FALSE, size = 0.25, color = "gray") +
+      geom_smooth(method = lm, se = FALSE, size = 0.5, color = "blue") +
+      facet_wrap(~ index_scale + index, scale = "free", ncol = 3) + 
+    theme_bw(base_size = 10) +
+    theme(strip.text = element_text(
+      size = 8)) +
+    labs(x = "Year",
+         y = "Hours Above Threshold") +
+  + xlim(1990, 2020) + 
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+## Days 
+
+days_plot <-
+  hsi_data_plot %>% 
+    filter(cat %in% "Days") %>%
+    mutate(index_scale = fct_relevel(index_scale, c("Temperature", "Heat Index", "WBGT"))) %>% 
+    ggplot(aes(x = year, y = value)) +
+      geom_point(size = 0.75) +
+      geom_smooth(aes(group = site_name), method = lm, se = FALSE, size = 0.25, color = "gray") +
+      geom_smooth(method = lm, se = FALSE, size = 0.5, color = "blue") +
+      facet_grid(season ~ index_scale, scale = "free") + 
+    theme_bw(base_size = 10) +
+    theme(strip.text = element_text(
+      size = 8)) +
+    labs(x = "Year",
+         y = "Days Above 1 SD Normal") + 
+      theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+
+
+mean_max_plot / anomaly_plot / hours_plot / days_plot +
   plot_annotation(tag_levels = "A")
 
 # ggsave("output/index_trends_patchwork.tiff")

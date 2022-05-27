@@ -610,7 +610,7 @@ amb_nb %>%
 #patchwork
 (a1 + a2 + a3) / (a4 + a5 + a6)
 
-ggsave("amb_sens.png", width = 10, height = 6)
+#ggsave("output/amb_sensitivity.tiff", width = 10, height = 6)
 ```
 
 
@@ -742,8 +742,175 @@ rme_nb %>%
 #patchwork
 (r1 + r2 + r3) / (r4 + r5 + r6)
 
-# ggsave("rme_sens.png", width = 10, height = 6)
+# ggsave("output/rme_sensitivity.tiff", width = 10, height = 6)
 ```
 
+
+Hospitalization sensitivity
+```{r}
+
+h1 <-
+hosp_boot_2yr_block %>% 
+    unnest(tidy) %>%
+        filter(term %in% "value") %>%
+    mutate(index = fct_reorder(index, exp(statistic))) %>% 
+   ggplot() +
+        geom_point(aes(x = exp(statistic), y = index)) +
+        geom_errorbarh(
+          aes(y = index,
+              xmin = exp(conf.low),
+              xmax = exp(conf.high))) +
+         geom_vline(aes(xintercept = 1), colour = "blue") +
+         coord_cartesian(xlim = c(0.75, 2.0)) +
+         theme_bw() +
+         theme(axis.text.y = element_text(size = rel(0.75)),
+               axis.title.y = element_blank()) +
+         ggtitle("Hospitalizations \n 2 year block") +
+         xlab("Rate Ratio") +
+         theme(plot.title = element_text(size = 8))
+
+# (h2): No bca models for hospitalization
+
+h3 <-
+hosp_boot_3yr_block %>% 
+    unnest(tidy) %>%
+        filter(term %in% "value") %>%
+    mutate(index = fct_reorder(index, exp(statistic))) %>% 
+   ggplot() +
+        geom_point(aes(x = exp(statistic), y = index)) +
+        geom_errorbarh(
+          aes(y = index,
+              xmin = exp(conf.low),
+              xmax = exp(conf.high))) +
+         geom_vline(aes(xintercept = 1), colour = "blue") +
+         coord_cartesian(xlim = c(0.75, 2.0)) +
+         theme_bw() +
+         theme(axis.text.y = element_text(size = rel(0.75)),
+               axis.title.y = element_blank()) +
+         ggtitle("Hospitalizations \n 3 year block") +
+         xlab("Rate Ratio") +
+         theme(plot.title = element_text(size = 8))
+
+
+h4 <-
+hosp_boot_std %>% 
+    unnest(tidy) %>%
+        filter(term %in% "value") %>%
+    mutate(index = fct_reorder(index, exp(statistic))) %>% 
+   ggplot() +
+        geom_point(aes(x = exp(statistic), y = index)) +
+        geom_errorbarh(
+          aes(y = index,
+              xmin = exp(conf.low),
+              xmax = exp(conf.high))) +
+         geom_vline(aes(xintercept = 1), colour = "blue") +
+         coord_cartesian(xlim = c(0.75, 2.0)) +
+         theme_bw() +
+         theme(axis.text.y = element_text(size = rel(0.75)),
+               axis.title.y = element_blank()) +
+         ggtitle("Hospitalizations \n standard bootstrap") +
+         xlab("Rate Ratio") +
+         theme(plot.title = element_text(size = 8))
+
+h5 <-
+hosp_nb %>% 
+    unnest(nb_tidy) %>%
+        filter(term %in% "value") %>%
+    mutate(index = fct_reorder(index, exp(estimate))) %>% 
+   ggplot() +
+        geom_point(aes(x = exp(estimate), y = index)) +
+        geom_errorbarh(
+          aes(y = index,
+              xmin = exp(conf.low),
+              xmax = exp(conf.high))) +
+         geom_vline(aes(xintercept = 1), colour = "blue") +
+         coord_cartesian(xlim = c(0.75, 2.0)) +
+         theme_bw() +
+         theme(axis.text.y = element_text(size = rel(0.75)),
+               axis.title.y = element_blank()) +
+         ggtitle("Hospitalizations \n neg bin - no year term, no bootstrap") +
+         xlab("Rate Ratio") +
+         theme(plot.title = element_text(size = 8))
+
+h6 <-
+hosp_nb %>% 
+    unnest(nb_year_tidy) %>%
+        filter(term %in% "value") %>%
+    mutate(index = fct_reorder(index, exp(estimate))) %>% 
+   ggplot() +
+        geom_point(aes(x = exp(estimate), y = index)) +
+        geom_errorbarh(
+          aes(y = index,
+              xmin = exp(conf.low),
+              xmax = exp(conf.high))) +
+         geom_vline(aes(xintercept = 1), colour = "blue") +
+         coord_cartesian(xlim = c(0.75, 2.0)) +
+         theme_bw() +
+         theme(axis.text.y = element_text(size = rel(0.75)),
+               axis.title.y = element_blank()) +
+         ggtitle("Hospitalizations \n neg bin - with year term, no bootstrap") +
+         xlab("Rate Ratio") +
+         theme(plot.title = element_text(size = 8))
+
+
+#patchwork
+(h1  + h3) / (h4 + h5 + h6)
+
+# ggsave("output/hosp_sensitivity.tiff", width = 10, height = 6)
+```
+
+
+
+## Model Statistics
+
+```{r}
+
+
+# Negative binomial, no year
+amb_nb %>% 
+  mutate(nb_glance =  map(nb_mod, broom::glance)) %>% 
+  unnest(nb_glance) %>% 
+  dplyr::select(-c("data", "nb_mod", "nb_tidy", "nb_year_mod", "nb_year_tidy"))
+
+                   
+# Negative binomial, year
+amb_nb %>% 
+  mutate(nb_glance =  map(nb_year_mod, broom::glance)) %>% 
+  unnest(nb_glance) %>% 
+  dplyr::select(-c("data", "nb_mod", "nb_tidy", "nb_year_mod", "nb_year_tidy"))
+
+
+
+# Negative binomial, no year
+hosp_nb %>%
+  slice_head(n = 6) %>% 
+  mutate(nb_glance =  map(nb_mod, broom::glance)) %>% 
+  unnest(nb_glance) %>% 
+  dplyr::select(-c("data", "nb_mod", "nb_tidy", "nb_year_mod", "nb_year_tidy"))
+
+                   
+# Negative binomial, year
+hosp_nb %>%
+  slice_head(n = 6) %>% 
+  mutate(nb_glance =  map(nb_year_mod, broom::glance)) %>% 
+  unnest(nb_glance) %>% 
+  dplyr::select(-c("data", "nb_mod", "nb_tidy", "nb_year_mod", "nb_year_tidy"))
+
+
+
+# Negative binomial, no year
+rme_nb %>% 
+  mutate(nb_glance =  map(nb_mod, broom::glance)) %>% 
+  unnest(nb_glance) %>% 
+  dplyr::select(-c("data", "nb_mod", "nb_tidy", "nb_year_mod", "nb_year_tidy"))
+
+                   
+# Negative binomial, year
+rme_nb %>% 
+  mutate(nb_glance =  map(nb_year_mod, broom::glance)) %>% 
+  unnest(nb_glance) %>% 
+  dplyr::select(-c("data", "nb_mod", "nb_tidy", "nb_year_mod", "nb_year_tidy"))
+
+```
 
 
