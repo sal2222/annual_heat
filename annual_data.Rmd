@@ -168,3 +168,40 @@ levels(hsi_data$site_name)
 
 summary(hsi_data)
 
+```
+
+
+## Population count
+```{r}
+
+hsi_data %>% 
+  filter(index %in% "mean_tmp",
+         type %in% "Hospitalizations") %>% 
+  group_by(year) %>% 
+  summarise(pop_total = sum(population)) %>% as.data.frame()
+
+
+hsi_data %>% 
+  filter(index %in% "mean_tmp",
+         type %in% "Hospitalizations") %>% 
+  group_by(year) %>% 
+  summarise(pop_total = sum(population)) %>%
+  ggplot(aes(x = year, y = pop_total)) +
+    geom_point()
+  
+  
+  
+hsi_data %>% 
+  filter(index %in% "mean_tmp",
+         type %in% "Hospitalizations") %>% 
+  group_by(year, site_name) %>% 
+  summarise(pop_total = sum(population)) %>% 
+  ggplot(aes(x = year, y = pop_total)) +
+    geom_point() +
+    facet_wrap(~site_name)
+
+
+
+```
+
+
